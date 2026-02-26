@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,7 +43,13 @@ func main() {
 				log.Printf("webhook error: %v", err)
 			}
 		})
-		log.Printf("webhook notifier enabled: %s", cfg.WebhookURL)
+		if u, err := url.Parse(cfg.WebhookURL); err == nil {
+			log.Printf("webhook notifier enabled: %s://%s/***", u.Scheme, u.Host)
+		} else {
+			log.Printf("webhook notifier enabled")
+		}
+	} else {
+		log.Printf("webhook notifier disabled (NPT_WEBHOOK_URL not set)")
 	}
 
 	// Start poller
