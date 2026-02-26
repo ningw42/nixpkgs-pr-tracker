@@ -50,3 +50,7 @@ A Go web service that tracks NixOS/nixpkgs pull requests and monitors whether th
 - `POST /api/prs` — Add a PR to track (body: `{"pr_number": 123}`)
 - `GET /api/prs` — List tracked PRs as JSON
 - `DELETE /api/prs/{number}` — Remove a tracked PR
+
+## Commit Convention
+
+This repo uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary). Format: `<type>[optional scope]: <description>`, e.g. `feat: add webhook support`, `fix(poller): handle nil pointer`. Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`, `style`, `perf` and `test`.
