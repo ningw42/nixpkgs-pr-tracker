@@ -3,9 +3,11 @@ package poller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -350,5 +352,124 @@ func TestStartPollsImmediately(t *testing.T) {
 	pr, _ := env.db.GetPR(20)
 	if pr.Title != "Immediate" {
 		t.Errorf("Title = %q, want %q (Start should poll immediately)", pr.Title, "Immediate")
+	}
+}
+
+func TestPollRateLimitStopsEarly(t *testing.T) {
+	env := setupPoller(t, []string{"nixos-unstable"})
+
+	// PR 31 has higher number so it comes first (ORDER BY pr_number DESC)
+	env.db.AddPR(30)
+	env.db.AddPR(31)
+
+	var apiCalls atomic.Int32
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/pulls/31", func(w http.ResponseWriter, r *http.Request) {
+		apiCalls.Add(1)
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(30*time.Minute).Unix()))
+		w.WriteHeader(http.StatusForbidden)
+	})
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/pulls/30", func(w http.ResponseWriter, r *http.Request) {
+		apiCalls.Add(1)
+		json.NewEncoder(w).Encode(map[string]any{
+			"number": 30, "title": "Should Not Reach", "user": map[string]any{"login": "z"},
+			"state": "open", "merged": false,
+		})
+	})
+
+	env.p.poll(context.Background())
+
+	if n := apiCalls.Load(); n != 1 {
+		t.Errorf("API calls = %d, want 1 (second PR should be skipped after rate limit)", n)
+	}
+
+	// Both PRs should still exist unmodified
+	pr31, err := env.db.GetPR(31)
+	if err != nil {
+		t.Fatalf("PR 31 should still exist: %v", err)
+	}
+	if pr31.Status != "open" {
+		t.Errorf("PR 31 status = %q, want %q", pr31.Status, "open")
+	}
+
+	pr30, err := env.db.GetPR(30)
+	if err != nil {
+		t.Fatalf("PR 30 should still exist: %v", err)
+	}
+	if pr30.Status != "open" {
+		t.Errorf("PR 30 status = %q, want %q", pr30.Status, "open")
+	}
+}
+
+func TestRunPollCycleBackoff(t *testing.T) {
+	env := setupPoller(t, []string{"nixos-unstable"})
+
+	env.db.AddPR(40)
+
+	// Rate limit resets 2 seconds from now (Unix timestamp has second granularity)
+	resetAt := time.Now().Add(2 * time.Second)
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/pulls/40", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetAt.Unix()))
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	start := time.Now()
+	env.p.runPollCycle(context.Background())
+	elapsed := time.Since(start)
+
+	// runPollCycle should have blocked until the reset time
+	if elapsed < 1*time.Second {
+		t.Errorf("runPollCycle returned too quickly (%v), expected backoff wait", elapsed)
+	}
+}
+
+func TestRunPollCycleBackoffContextCancel(t *testing.T) {
+	env := setupPoller(t, []string{"nixos-unstable"})
+
+	env.db.AddPR(41)
+
+	// Rate limit resets far in the future
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/pulls/41", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(1*time.Hour).Unix()))
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	env.p.runPollCycle(ctx)
+	elapsed := time.Since(start)
+
+	// Should unblock quickly after cancel, not wait the full hour
+	if elapsed > 2*time.Second {
+		t.Errorf("runPollCycle took %v after context cancel, expected fast return", elapsed)
+	}
+}
+
+func TestRunPollCycleResetInPast(t *testing.T) {
+	env := setupPoller(t, []string{"nixos-unstable"})
+
+	env.db.AddPR(42)
+
+	// Rate limit reset already in the past
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/pulls/42", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(-1*time.Minute).Unix()))
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	start := time.Now()
+	env.p.runPollCycle(context.Background())
+	elapsed := time.Since(start)
+
+	// Should return immediately since reset is in the past
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("runPollCycle took %v for past reset time, expected immediate return", elapsed)
 	}
 }

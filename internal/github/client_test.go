@@ -3,9 +3,12 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func newTestClient(t *testing.T, handler http.HandlerFunc) (*Client, *httptest.Server) {
@@ -224,5 +227,59 @@ func TestRateLimitHeader(t *testing.T) {
 	_, err := c.GetPR(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("GetPR: %v", err)
+	}
+}
+
+func TestRateLimitedResponse(t *testing.T) {
+	resetTime := time.Now().Add(30 * time.Minute).Unix()
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetTime))
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	_, err := c.GetPR(context.Background(), 1)
+	if err == nil {
+		t.Fatal("expected error for rate-limited 403")
+	}
+	var rlErr *RateLimitError
+	if !errors.As(err, &rlErr) {
+		t.Fatalf("expected RateLimitError, got %T: %v", err, err)
+	}
+	if rlErr.RetryAfter.Unix() != resetTime {
+		t.Errorf("RetryAfter = %v, want unix %d", rlErr.RetryAfter, resetTime)
+	}
+}
+
+func TestRateLimited429(t *testing.T) {
+	resetTime := time.Now().Add(10 * time.Minute).Unix()
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetTime))
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+
+	_, err := c.IsCommitInBranch(context.Background(), "abc123", "nixos-unstable")
+	if err == nil {
+		t.Fatal("expected error for rate-limited 429")
+	}
+	var rlErr *RateLimitError
+	if !errors.As(err, &rlErr) {
+		t.Fatalf("expected RateLimitError, got %T: %v", err, err)
+	}
+}
+
+func TestNonRateLimited403(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	_, err := c.GetPR(context.Background(), 1)
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+	var rlErr *RateLimitError
+	if errors.As(err, &rlErr) {
+		t.Fatal("expected regular error, not RateLimitError, for 403 without rate limit headers")
 	}
 }

@@ -7,7 +7,18 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
+
+// RateLimitError is returned when GitHub responds with a rate limit (403 or 429)
+// and the X-RateLimit-Remaining header is 0.
+type RateLimitError struct {
+	RetryAfter time.Time
+}
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf("GitHub API rate limited, resets at %s", e.RetryAfter.Format(time.RFC3339))
+}
 
 type PRInfo struct {
 	Number     int
@@ -48,6 +59,18 @@ func (c *Client) doRequest(ctx context.Context, url string) (*http.Response, err
 	if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining != "" {
 		if n, err := strconv.Atoi(remaining); err == nil && n < 100 {
 			log.Printf("GitHub API rate limit low: %d remaining", n)
+		}
+	}
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+		if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining == "0" {
+			resp.Body.Close()
+			var resetTime time.Time
+			if resetStr := resp.Header.Get("X-RateLimit-Reset"); resetStr != "" {
+				if epoch, err := strconv.ParseInt(resetStr, 10, 64); err == nil {
+					resetTime = time.Unix(epoch, 0)
+				}
+			}
+			return nil, &RateLimitError{RetryAfter: resetTime}
 		}
 	}
 	return resp, nil

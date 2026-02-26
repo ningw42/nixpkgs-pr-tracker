@@ -2,6 +2,7 @@ package poller
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -30,7 +31,7 @@ func New(database *db.DB, gh *github.Client, bus *event.Bus, interval time.Durat
 
 func (p *Poller) Start(ctx context.Context) {
 	go func() {
-		p.poll(ctx)
+		p.runPollCycle(ctx)
 		ticker := time.NewTicker(p.interval)
 		defer ticker.Stop()
 		for {
@@ -38,22 +39,42 @@ func (p *Poller) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				p.poll(ctx)
+				p.runPollCycle(ctx)
 			}
 		}
 	}()
 }
 
-func (p *Poller) poll(ctx context.Context) {
+// runPollCycle runs a poll and, if rate-limited, waits until the reset time
+// before returning so the next ticker tick doesn't fire too early.
+func (p *Poller) runPollCycle(ctx context.Context) {
+	rlErr := p.poll(ctx)
+	if rlErr == nil {
+		return
+	}
+	wait := time.Until(rlErr.RetryAfter)
+	if wait <= 0 {
+		return
+	}
+	log.Printf("poller: waiting %s until rate limit resets", wait.Round(time.Second))
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+}
+
+func (p *Poller) poll(ctx context.Context) *github.RateLimitError {
 	prs, err := p.db.ListPRs()
 	if err != nil {
 		log.Printf("poller: listing PRs: %v", err)
-		return
+		return nil
 	}
 
 	if len(prs) == 0 {
 		log.Printf("poller: no PRs to check")
-		return
+		return nil
 	}
 
 	prNumbers := make([]int, len(prs))
@@ -64,24 +85,31 @@ func (p *Poller) poll(ctx context.Context) {
 
 	for _, pr := range prs {
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
-		p.pollPR(ctx, pr)
+		if err := p.pollPR(ctx, pr); err != nil {
+			var rlErr *github.RateLimitError
+			if errors.As(err, &rlErr) {
+				log.Printf("poller: rate limited, resets at %s, skipping remaining PRs", rlErr.RetryAfter.Format("15:04:05"))
+				return rlErr
+			}
+		}
 	}
+	return nil
 }
 
-func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) {
+func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) error {
 	if pr.Status == "open" {
 		info, err := p.gh.GetPR(ctx, pr.PRNumber)
 		if err != nil {
 			log.Printf("poller: fetching PR #%d: %v", pr.PRNumber, err)
-			return
+			return err
 		}
 
 		if info.Merged {
 			if err := p.db.UpdatePRStatus(pr.PRNumber, "merged", info.MergeCommit, info.Title, info.Author); err != nil {
 				log.Printf("poller: updating PR #%d status: %v", pr.PRNumber, err)
-				return
+				return nil
 			}
 			p.bus.Publish(event.Event{
 				Type:      event.PRMerged,
@@ -98,13 +126,13 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) {
 			if err := p.db.UpdatePRStatus(pr.PRNumber, "closed", "", info.Title, info.Author); err != nil {
 				log.Printf("poller: updating PR #%d status: %v", pr.PRNumber, err)
 			}
-			return
+			return nil
 		} else {
 			// Still open, update title/author
 			if err := p.db.UpdatePRStatus(pr.PRNumber, "open", "", info.Title, info.Author); err != nil {
 				log.Printf("poller: updating PR #%d info: %v", pr.PRNumber, err)
 			}
-			return
+			return nil
 		}
 	}
 
@@ -124,7 +152,7 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) {
 			inBranch, err := p.gh.IsCommitInBranch(ctx, pr.MergeCommit, branch)
 			if err != nil {
 				log.Printf("poller: checking PR #%d in %s: %v", pr.PRNumber, branch, err)
-				continue
+				return err
 			}
 
 			if inBranch {
@@ -166,4 +194,5 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) {
 			})
 		}
 	}
+	return nil
 }
