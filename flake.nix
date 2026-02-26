@@ -9,14 +9,22 @@
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      packages = forAllSystems (pkgs: {
-        default = pkgs.buildGoModule {
+      packages = forAllSystems (pkgs:
+        let
+          applied = pkgs.extend self.overlays.default;
+        in
+        {
+          default = applied.nixpkgs-pr-tracker;
+        });
+
+      overlays.default = final: prev: {
+        nixpkgs-pr-tracker = final.buildGoModule {
           pname = "nixpkgs-pr-tracker";
           version = "0.1.0";
           src = ./.;
           vendorHash = "sha256-JlQWPfcNpIgag1LHDcvz1wlxo/RcdN02J3zKXFd1tvc=";
         };
-      });
+      };
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
