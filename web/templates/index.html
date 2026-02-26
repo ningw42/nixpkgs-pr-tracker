@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nixpkgs PR Tracker</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; }
+        h1 { margin-bottom: 20px; }
+        .track-form { background: #fff; padding: 16px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 10px; align-items: center; }
+        .track-form input { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: 200px; }
+        .track-form button { padding: 8px 16px; background: #0969da; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .track-form button:hover { background: #0550ae; }
+        .message { padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        .message.error { background: #fdd; color: #900; }
+        .message.success { background: #dfd; color: #060; }
+        table { width: 100%; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-collapse: collapse; }
+        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f8f8; font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+        a { color: #0969da; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .status { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .status-open { background: #dafbe1; color: #116329; }
+        .status-merged { background: #ddf4ff; color: #0550ae; }
+        .status-closed { background: #fdd; color: #900; }
+        .branch-yes { color: #116329; font-weight: 500; }
+        .branch-no { color: #999; }
+        .delete-btn { background: none; border: none; color: #cf222e; cursor: pointer; font-size: 13px; }
+        .delete-btn:hover { text-decoration: underline; }
+        .empty { text-align: center; padding: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>nixpkgs PR Tracker</h1>
+
+    <div class="track-form">
+        <label for="pr-input">Track a PR:</label>
+        <input type="number" id="pr-input" placeholder="PR number (e.g. 350656)" min="1">
+        <button onclick="trackPR()">Track</button>
+    </div>
+
+    <div id="message"></div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>PR</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Status</th>
+                <th>Branches</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {{if .}}
+            {{range .}}
+            <tr id="pr-{{.PRNumber}}">
+                <td><a href="https://github.com/NixOS/nixpkgs/pull/{{.PRNumber}}" target="_blank">#{{.PRNumber}}</a></td>
+                <td>{{.Title}}</td>
+                <td>{{.Author}}</td>
+                <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+                <td>
+                    {{range .Branches}}
+                    {{if .Landed}}<span class="branch-yes">{{.Branch}}</span>{{else}}<span class="branch-no">{{.Branch}}</span>{{end}}
+                    {{end}}
+                </td>
+                <td><button class="delete-btn" onclick="deletePR({{.PRNumber}})">remove</button></td>
+            </tr>
+            {{end}}
+            {{else}}
+            <tr><td colspan="6" class="empty">No PRs tracked yet. Add one above.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    <script>
+        function showMessage(text, type) {
+            const el = document.getElementById('message');
+            el.innerHTML = '<div class="message ' + type + '">' + text + '</div>';
+            setTimeout(() => el.innerHTML = '', 5000);
+        }
+
+        function trackPR() {
+            const input = document.getElementById('pr-input');
+            const num = parseInt(input.value, 10);
+            if (!num || num <= 0) { showMessage('Enter a valid PR number', 'error'); return; }
+
+            fetch('/api/prs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({pr_number: num})
+            }).then(resp => {
+                if (!resp.ok) return resp.json().then(d => { throw new Error(d.error || 'Failed'); });
+                showMessage('PR #' + num + ' added', 'success');
+                input.value = '';
+                setTimeout(() => location.reload(), 500);
+            }).catch(err => showMessage(err.message, 'error'));
+        }
+
+        function deletePR(num) {
+            fetch('/api/prs/' + num, {method: 'DELETE'}).then(resp => {
+                if (!resp.ok) throw new Error('Failed to remove');
+                const row = document.getElementById('pr-' + num);
+                if (row) row.remove();
+                showMessage('PR #' + num + ' removed', 'success');
+            }).catch(err => showMessage(err.message, 'error'));
+        }
+
+        document.getElementById('pr-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') trackPR();
+        });
+    </script>
+</body>
+</html>

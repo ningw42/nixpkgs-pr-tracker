@@ -1,0 +1,28 @@
+# Telepush custom inlet for nixpkgs-pr-tracker.
+# Place this file in telepush's inlets.d/ directory.
+#
+# Set NPT_WEBHOOK_URL to:
+#   https://<telepush-host>/api/inlets/nixpkgs-pr-tracker/<recipient-token>
+#
+# Payload fields: event, pr_number, title, author, branch, timestamp
+# Event types: pr_added, pr_removed, pr_merged, pr_landed_branch
+
+name: nixpkgs-pr-tracker
+content_type: application/json
+header_vars:
+template: |
+  {{- if eq .Message.event "pr_added" -}}
+  *New PR tracked:* [#{{ .Message.pr_number }}](https://github.com/NixOS/nixpkgs/pull/{{ .Message.pr_number }})
+  {{ .Message.title }}
+  by {{ .Message.author }}
+  {{- else if eq .Message.event "pr_merged" -}}
+  *PR merged:* [#{{ .Message.pr_number }}](https://github.com/NixOS/nixpkgs/pull/{{ .Message.pr_number }})
+  {{ .Message.title }}
+  by {{ .Message.author }}
+  {{- else if eq .Message.event "pr_landed_branch" -}}
+  *PR landed in `{{ .Message.branch }}`:* [#{{ .Message.pr_number }}](https://github.com/NixOS/nixpkgs/pull/{{ .Message.pr_number }})
+  {{ .Message.title }}
+  {{- else if eq .Message.event "pr_removed" -}}
+  *PR removed:* [#{{ .Message.pr_number }}](https://github.com/NixOS/nixpkgs/pull/{{ .Message.pr_number }})
+  {{ .Message.title }}
+  {{- end }}
