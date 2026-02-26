@@ -51,6 +51,17 @@ func (p *Poller) poll(ctx context.Context) {
 		return
 	}
 
+	if len(prs) == 0 {
+		log.Printf("poller: no PRs to check")
+		return
+	}
+
+	prNumbers := make([]int, len(prs))
+	for i, pr := range prs {
+		prNumbers[i] = pr.PRNumber
+	}
+	log.Printf("poller: checking %d PRs: %v", len(prs), prNumbers)
+
 	for _, pr := range prs {
 		if ctx.Err() != nil {
 			return
