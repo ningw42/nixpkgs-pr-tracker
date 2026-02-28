@@ -94,6 +94,9 @@ func (p *Poller) poll(ctx context.Context) *github.RateLimitError {
 				return rlErr
 			}
 		}
+		if err := p.db.UpdateLastChecked(pr.PRNumber); err != nil {
+			log.Printf("poller: updating last_checked_at for PR #%d: %v", pr.PRNumber, err)
+		}
 	}
 	return nil
 }

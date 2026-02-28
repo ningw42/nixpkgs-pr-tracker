@@ -51,6 +51,7 @@
                 <th>Author</th>
                 <th>Status</th>
                 <th>Branches</th>
+                <th>Last Checked</th>
                 <th></th>
             </tr>
         </thead>
@@ -67,11 +68,12 @@
                     {{if .Landed}}<span class="branch-yes">{{.Branch}}</span>{{else}}<span class="branch-no">{{.Branch}}</span>{{end}}
                     {{end}}
                 </td>
+                <td>{{if .LastCheckedAt.IsZero}}-{{else}}{{.LastCheckedAt.Format "2006-01-02 15:04:05"}}{{end}}</td>
                 <td><button class="delete-btn" onclick="deletePR({{.PRNumber}})">remove</button></td>
             </tr>
             {{end}}
             {{else}}
-            <tr><td colspan="6" class="empty">No PRs tracked yet. Add one above.</td></tr>
+            <tr><td colspan="7" class="empty">No PRs tracked yet. Add one above.</td></tr>
             {{end}}
         </tbody>
     </table>

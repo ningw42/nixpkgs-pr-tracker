@@ -1,7 +1,10 @@
 package db
 
 import (
+	"database/sql"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 func newTestDB(t *testing.T) *DB {
@@ -236,5 +239,99 @@ func TestListPRsIncludesBranches(t *testing.T) {
 	}
 	if !prs[0].Branches[0].Landed {
 		t.Error("expected branch to be landed")
+	}
+}
+
+func TestUpdateLastChecked(t *testing.T) {
+	d := newTestDB(t)
+
+	d.AddPR(42)
+
+	// Before UpdateLastChecked, LastCheckedAt should be zero.
+	pr, err := d.GetPR(42)
+	if err != nil {
+		t.Fatalf("GetPR: %v", err)
+	}
+	if !pr.LastCheckedAt.IsZero() {
+		t.Errorf("LastCheckedAt before update = %v, want zero", pr.LastCheckedAt)
+	}
+
+	if err := d.UpdateLastChecked(42); err != nil {
+		t.Fatalf("UpdateLastChecked: %v", err)
+	}
+
+	pr, err = d.GetPR(42)
+	if err != nil {
+		t.Fatalf("GetPR after update: %v", err)
+	}
+	if pr.LastCheckedAt.IsZero() {
+		t.Error("LastCheckedAt after update should not be zero")
+	}
+}
+
+func TestMigrationFromV1(t *testing.T) {
+	// Simulate a v1 database (no last_checked_at column) and verify
+	// that opening it with New() applies the v2 migration.
+	dsn := "file:" + t.Name() + "?mode=memory&cache=shared"
+	sqlDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatalf("opening raw DB: %v", err)
+	}
+	// Keep sqlDB open so the shared in-memory database survives.
+	defer sqlDB.Close()
+
+	// Create v1 schema manually.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE tracked_prs (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			pr_number     INTEGER UNIQUE NOT NULL,
+			title         TEXT NOT NULL DEFAULT '',
+			author        TEXT NOT NULL DEFAULT '',
+			status        TEXT NOT NULL DEFAULT 'open',
+			merge_commit  TEXT NOT NULL DEFAULT '',
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE TABLE branch_status (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			pr_number   INTEGER NOT NULL,
+			branch      TEXT NOT NULL,
+			landed      BOOLEAN NOT NULL DEFAULT 0,
+			landed_at   DATETIME,
+			UNIQUE(pr_number, branch),
+			FOREIGN KEY (pr_number) REFERENCES tracked_prs(pr_number)
+		);
+		PRAGMA user_version = 1;
+	`); err != nil {
+		t.Fatalf("creating v1 schema: %v", err)
+	}
+
+	// Insert a row before migration.
+	if _, err := sqlDB.Exec(`INSERT INTO tracked_prs (pr_number) VALUES (99)`); err != nil {
+		t.Fatalf("inserting v1 row: %v", err)
+	}
+
+	// Open via New() which should apply v2 migration.
+	d, err := New(dsn)
+	if err != nil {
+		t.Fatalf("New on v1 DB: %v", err)
+	}
+	t.Cleanup(func() { d.Close() })
+
+	pr, err := d.GetPR(99)
+	if err != nil {
+		t.Fatalf("GetPR after migration: %v", err)
+	}
+	if !pr.LastCheckedAt.IsZero() {
+		t.Errorf("LastCheckedAt for pre-existing row = %v, want zero", pr.LastCheckedAt)
+	}
+
+	// Verify user_version is now 2.
+	var version int
+	if err := d.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatalf("PRAGMA user_version: %v", err)
+	}
+	if version != 2 {
+		t.Errorf("user_version = %d, want 2", version)
 	}
 }

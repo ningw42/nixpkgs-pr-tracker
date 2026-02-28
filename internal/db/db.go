@@ -8,15 +8,16 @@ import (
 )
 
 type TrackedPR struct {
-	ID          int
-	PRNumber    int
-	Title       string
-	Author      string
-	Status      string
-	MergeCommit string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Branches    []BranchStatus
+	ID            int
+	PRNumber      int
+	Title         string
+	Author        string
+	Status        string
+	MergeCommit   string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	LastCheckedAt time.Time
+	Branches      []BranchStatus
 }
 
 type BranchStatus struct {
@@ -47,29 +48,50 @@ func (d *DB) Close() error {
 }
 
 func (d *DB) migrate() error {
-	_, err := d.db.Exec(`
-		CREATE TABLE IF NOT EXISTS tracked_prs (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			pr_number     INTEGER UNIQUE NOT NULL,
-			title         TEXT NOT NULL DEFAULT '',
-			author        TEXT NOT NULL DEFAULT '',
-			status        TEXT NOT NULL DEFAULT 'open',
-			merge_commit  TEXT NOT NULL DEFAULT '',
-			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
+	var version int
+	if err := d.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
 
-		CREATE TABLE IF NOT EXISTS branch_status (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			pr_number   INTEGER NOT NULL,
-			branch      TEXT NOT NULL,
-			landed      BOOLEAN NOT NULL DEFAULT 0,
-			landed_at   DATETIME,
-			UNIQUE(pr_number, branch),
-			FOREIGN KEY (pr_number) REFERENCES tracked_prs(pr_number)
-		);
-	`)
-	return err
+	if version < 1 {
+		if _, err := d.db.Exec(`
+			CREATE TABLE IF NOT EXISTS tracked_prs (
+				id            INTEGER PRIMARY KEY AUTOINCREMENT,
+				pr_number     INTEGER UNIQUE NOT NULL,
+				title         TEXT NOT NULL DEFAULT '',
+				author        TEXT NOT NULL DEFAULT '',
+				status        TEXT NOT NULL DEFAULT 'open',
+				merge_commit  TEXT NOT NULL DEFAULT '',
+				created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+			);
+
+			CREATE TABLE IF NOT EXISTS branch_status (
+				id          INTEGER PRIMARY KEY AUTOINCREMENT,
+				pr_number   INTEGER NOT NULL,
+				branch      TEXT NOT NULL,
+				landed      BOOLEAN NOT NULL DEFAULT 0,
+				landed_at   DATETIME,
+				UNIQUE(pr_number, branch),
+				FOREIGN KEY (pr_number) REFERENCES tracked_prs(pr_number)
+			);
+
+			PRAGMA user_version = 1;
+		`); err != nil {
+			return err
+		}
+	}
+
+	if version < 2 {
+		if _, err := d.db.Exec(`
+			ALTER TABLE tracked_prs ADD COLUMN last_checked_at DATETIME NOT NULL DEFAULT '0001-01-01 00:00:00';
+			PRAGMA user_version = 2;
+		`); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *DB) AddPR(prNumber int) error {
@@ -97,7 +119,7 @@ func (d *DB) RemovePR(prNumber int) error {
 }
 
 func (d *DB) ListPRs() ([]TrackedPR, error) {
-	rows, err := d.db.Query(`SELECT id, pr_number, title, author, status, merge_commit, created_at, updated_at FROM tracked_prs ORDER BY pr_number DESC`)
+	rows, err := d.db.Query(`SELECT id, pr_number, title, author, status, merge_commit, created_at, updated_at, last_checked_at FROM tracked_prs ORDER BY pr_number DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +128,7 @@ func (d *DB) ListPRs() ([]TrackedPR, error) {
 	var prs []TrackedPR
 	for rows.Next() {
 		var pr TrackedPR
-		if err := rows.Scan(&pr.ID, &pr.PRNumber, &pr.Title, &pr.Author, &pr.Status, &pr.MergeCommit, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
+		if err := rows.Scan(&pr.ID, &pr.PRNumber, &pr.Title, &pr.Author, &pr.Status, &pr.MergeCommit, &pr.CreatedAt, &pr.UpdatedAt, &pr.LastCheckedAt); err != nil {
 			return nil, err
 		}
 		branches, err := d.GetBranchStatus(pr.PRNumber)
@@ -122,9 +144,9 @@ func (d *DB) ListPRs() ([]TrackedPR, error) {
 func (d *DB) GetPR(prNumber int) (*TrackedPR, error) {
 	var pr TrackedPR
 	err := d.db.QueryRow(
-		`SELECT id, pr_number, title, author, status, merge_commit, created_at, updated_at FROM tracked_prs WHERE pr_number = ?`,
+		`SELECT id, pr_number, title, author, status, merge_commit, created_at, updated_at, last_checked_at FROM tracked_prs WHERE pr_number = ?`,
 		prNumber,
-	).Scan(&pr.ID, &pr.PRNumber, &pr.Title, &pr.Author, &pr.Status, &pr.MergeCommit, &pr.CreatedAt, &pr.UpdatedAt)
+	).Scan(&pr.ID, &pr.PRNumber, &pr.Title, &pr.Author, &pr.Status, &pr.MergeCommit, &pr.CreatedAt, &pr.UpdatedAt, &pr.LastCheckedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +162,14 @@ func (d *DB) UpdatePRStatus(prNumber int, status string, mergeCommit string, tit
 	_, err := d.db.Exec(
 		`UPDATE tracked_prs SET status = ?, merge_commit = ?, title = ?, author = ?, updated_at = CURRENT_TIMESTAMP WHERE pr_number = ?`,
 		status, mergeCommit, title, author, prNumber,
+	)
+	return err
+}
+
+func (d *DB) UpdateLastChecked(prNumber int) error {
+	_, err := d.db.Exec(
+		`UPDATE tracked_prs SET last_checked_at = CURRENT_TIMESTAMP WHERE pr_number = ?`,
+		prNumber,
 	)
 	return err
 }
