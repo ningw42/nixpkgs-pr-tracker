@@ -21,27 +21,38 @@
         "x86_64-darwin"
         "aarch64-darwin"
       ];
-      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      treefmtEval = forAllSystems (pkgs: treefmt-nix.lib.evalModule pkgs ./treefmt.nix);
+      forAllSystems =
+        f:
+        nixpkgs.lib.genAttrs systems (
+          system:
+          f {
+            inherit system;
+            pkgs = nixpkgs.legacyPackages.${system};
+          }
+        );
+      treefmtEval = forAllSystems ({ pkgs, ... }: treefmt-nix.lib.evalModule pkgs ./treefmt.nix);
     in
     {
-      formatter = forAllSystems (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
+      formatter = forAllSystems ({ system, ... }: treefmtEval.${system}.config.build.wrapper);
 
-      checks = forAllSystems (pkgs: {
-        formatting = treefmtEval.${pkgs.system}.config.build.check self;
-        pre-commit-check = git-hooks.lib.${pkgs.system}.run {
-          src = ./.;
-          hooks = {
-            treefmt = {
-              enable = true;
-              packageOverrides.treefmt = treefmtEval.${pkgs.system}.config.build.wrapper;
+      checks = forAllSystems (
+        { system, ... }:
+        {
+          formatting = treefmtEval.${system}.config.build.check self;
+          pre-commit-check = git-hooks.lib.${system}.run {
+            src = ./.;
+            hooks = {
+              treefmt = {
+                enable = true;
+                packageOverrides.treefmt = treefmtEval.${system}.config.build.wrapper;
+              };
             };
           };
-        };
-      });
+        }
+      );
 
       packages = forAllSystems (
-        pkgs:
+        { pkgs, ... }:
         let
           applied = pkgs.extend self.overlays.default;
         in
@@ -59,15 +70,18 @@
         };
       };
 
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          inherit (self.checks.${pkgs.system}.pre-commit-check) shellHook;
-          packages = with pkgs; [
-            go
-            gopls
-            gotools
-          ];
-        };
-      });
+      devShells = forAllSystems (
+        { system, pkgs, ... }:
+        {
+          default = pkgs.mkShell {
+            inherit (self.checks.${system}.pre-commit-check) shellHook;
+            packages = with pkgs; [
+              go
+              gopls
+              gotools
+            ];
+          };
+        }
+      );
     };
 }
