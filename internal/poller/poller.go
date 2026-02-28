@@ -154,11 +154,12 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) error {
 
 			inBranch, err := p.gh.IsCommitInBranch(ctx, pr.MergeCommit, branch)
 			if err != nil {
-				log.Printf("poller: checking PR #%d in %s: %v", pr.PRNumber, branch, err)
+				log.Printf("poller: checking PR #%d commit %s in %s: %v", pr.PRNumber, pr.MergeCommit, branch, err)
 				return err
 			}
 
 			if inBranch {
+				log.Printf("poller: PR #%d commit %s found in %s", pr.PRNumber, pr.MergeCommit, branch)
 				if err := p.db.UpdateBranchLanded(pr.PRNumber, branch); err != nil {
 					log.Printf("poller: updating branch status for PR #%d: %v", pr.PRNumber, err)
 					continue
@@ -172,6 +173,8 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) error {
 					Timestamp: time.Now(),
 				})
 				landedBranches[branch] = true
+			} else {
+				log.Printf("poller: PR #%d commit %s not yet in %s", pr.PRNumber, pr.MergeCommit, branch)
 			}
 		}
 
