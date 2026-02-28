@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"log"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -54,6 +55,7 @@ func (d *DB) migrate() error {
 	}
 
 	if version < 1 {
+		log.Printf("db: migrating schema to version 1 (initial tables)")
 		if _, err := d.db.Exec(`
 			CREATE TABLE IF NOT EXISTS tracked_prs (
 				id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +85,7 @@ func (d *DB) migrate() error {
 	}
 
 	if version < 2 {
+		log.Printf("db: migrating schema to version 2 (add last_checked_at)")
 		if _, err := d.db.Exec(`
 			ALTER TABLE tracked_prs ADD COLUMN last_checked_at DATETIME NOT NULL DEFAULT '0001-01-01 00:00:00';
 			PRAGMA user_version = 2;
