@@ -1,21 +1,54 @@
 {
   description = "nixpkgs PR tracker";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    git-hooks.url = "github:cachix/git-hooks.nix";
+  };
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      treefmt-nix,
+      git-hooks,
+    }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      treefmtEval = forAllSystems (pkgs: treefmt-nix.lib.evalModule pkgs ./treefmt.nix);
     in
     {
-      packages = forAllSystems (pkgs:
+      formatter = forAllSystems (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
+
+      checks = forAllSystems (pkgs: {
+        formatting = treefmtEval.${pkgs.system}.config.build.check self;
+        pre-commit-check = git-hooks.lib.${pkgs.system}.run {
+          src = ./.;
+          hooks = {
+            treefmt = {
+              enable = true;
+              packageOverrides.treefmt = treefmtEval.${pkgs.system}.config.build.wrapper;
+            };
+          };
+        };
+      });
+
+      packages = forAllSystems (
+        pkgs:
         let
           applied = pkgs.extend self.overlays.default;
         in
         {
           default = applied.nixpkgs-pr-tracker;
-        });
+        }
+      );
 
       overlays.default = final: prev: {
         nixpkgs-pr-tracker = final.buildGoModule {
@@ -28,6 +61,7 @@
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
+          inherit (self.checks.${pkgs.system}.pre-commit-check) shellHook;
           packages = with pkgs; [
             go
             gopls

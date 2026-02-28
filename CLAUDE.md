@@ -17,14 +17,14 @@ Dev shell via Nix: `nix develop` (provides go, gopls, gotools).
 
 All config is via environment variables (no flags/files):
 
-| Variable | Default | Description |
-|---|---|---|
-| `NPT_LISTEN_ADDR` | `:8585` | HTTP server address |
-| `NPT_DB_PATH` | `./tracker.db` | SQLite database path |
-| `NPT_GITHUB_TOKEN` | (empty) | GitHub API token (optional, raises rate limits) |
-| `NPT_WEBHOOK_URL` | (empty) | Webhook URL for notifications |
-| `NPT_POLL_INTERVAL` | `5m` | How often to poll GitHub |
-| `NPT_BRANCHES` | `nixos-unstable` | Comma-separated list of branches to track |
+| Variable            | Default          | Description                                     |
+| ------------------- | ---------------- | ----------------------------------------------- |
+| `NPT_LISTEN_ADDR`   | `:8585`          | HTTP server address                             |
+| `NPT_DB_PATH`       | `./tracker.db`   | SQLite database path                            |
+| `NPT_GITHUB_TOKEN`  | (empty)          | GitHub API token (optional, raises rate limits) |
+| `NPT_WEBHOOK_URL`   | (empty)          | Webhook URL for notifications                   |
+| `NPT_POLL_INTERVAL` | `5m`             | How often to poll GitHub                        |
+| `NPT_BRANCHES`      | `nixos-unstable` | Comma-separated list of branches to track       |
 
 ## Architecture
 

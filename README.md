@@ -34,14 +34,14 @@ Open http://localhost:8585 in your browser to use the dashboard.
 
 All configuration is via environment variables:
 
-| Variable | Default | Description |
-|---|---|---|
-| `NPT_LISTEN_ADDR` | `:8585` | HTTP listen address |
-| `NPT_DB_PATH` | `./tracker.db` | SQLite database file path |
-| `NPT_GITHUB_TOKEN` | _(empty)_ | GitHub API token (optional, raises rate limits) |
-| `NPT_WEBHOOK_URL` | _(empty)_ | Webhook URL for notifications |
-| `NPT_POLL_INTERVAL` | `5m` | How often to poll GitHub |
-| `NPT_BRANCHES` | `nixos-unstable` | Comma-separated branches to track |
+| Variable            | Default          | Description                                     |
+| ------------------- | ---------------- | ----------------------------------------------- |
+| `NPT_LISTEN_ADDR`   | `:8585`          | HTTP listen address                             |
+| `NPT_DB_PATH`       | `./tracker.db`   | SQLite database file path                       |
+| `NPT_GITHUB_TOKEN`  | _(empty)_        | GitHub API token (optional, raises rate limits) |
+| `NPT_WEBHOOK_URL`   | _(empty)_        | Webhook URL for notifications                   |
+| `NPT_POLL_INTERVAL` | `5m`             | How often to poll GitHub                        |
+| `NPT_BRANCHES`      | `nixos-unstable` | Comma-separated branches to track               |
 
 ### Example
 
@@ -79,12 +79,12 @@ curl -XDELETE http://localhost:8585/api/prs/488091
 
 Set `NPT_WEBHOOK_URL` to receive JSON webhook notifications for these events:
 
-| Event | Meaning |
-|---|---|
-| `pr_added` | A PR was added to tracking |
-| `pr_merged` | A tracked PR was merged |
-| `pr_landed_branch` | A merge commit landed in a tracked branch |
-| `pr_removed` | A PR was removed (manually or auto-removed after landing in all branches) |
+| Event              | Meaning                                                                   |
+| ------------------ | ------------------------------------------------------------------------- |
+| `pr_added`         | A PR was added to tracking                                                |
+| `pr_merged`        | A tracked PR was merged                                                   |
+| `pr_landed_branch` | A merge commit landed in a tracked branch                                 |
+| `pr_removed`       | A PR was removed (manually or auto-removed after landing in all branches) |
 
 Webhook payload:
 

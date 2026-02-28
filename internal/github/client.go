@@ -21,11 +21,11 @@ func (e *RateLimitError) Error() string {
 }
 
 type PRInfo struct {
-	Number     int
-	Title      string
-	Author     string
-	State      string // "open", "closed"
-	Merged     bool
+	Number      int
+	Title       string
+	Author      string
+	State       string // "open", "closed"
+	Merged      bool
 	MergeCommit string
 }
 
@@ -94,8 +94,8 @@ func (c *Client) GetPR(ctx context.Context, prNumber int) (*PRInfo, error) {
 		User   struct {
 			Login string `json:"login"`
 		} `json:"user"`
-		State        string `json:"state"`
-		Merged       bool   `json:"merged"`
+		State          string `json:"state"`
+		Merged         bool   `json:"merged"`
 		MergeCommitSHA string `json:"merge_commit_sha"`
 	}
 

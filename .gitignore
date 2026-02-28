@@ -1,3 +1,4 @@
 tracker.db
 /result
 /nixpkgs-pr-tracker
+.pre-commit-config.yaml
