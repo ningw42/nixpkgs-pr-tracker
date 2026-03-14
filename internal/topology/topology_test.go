@@ -54,6 +54,60 @@ func TestPartialLanding(t *testing.T) {
 	if node := p.NodeMap["nixos-unstable"]; node.Status != StatusPending {
 		t.Errorf("nixos-unstable: status = %q, want %q", node.Status, StatusPending)
 	}
+
+	// staging and staging-next should be skipped since master landed but they're unknown
+	if node := p.NodeMap["staging"]; node.Status != StatusSkipped {
+		t.Errorf("staging: status = %q, want %q", node.Status, StatusSkipped)
+	}
+	if node := p.NodeMap["staging-next"]; node.Status != StatusSkipped {
+		t.Errorf("staging-next: status = %q, want %q", node.Status, StatusSkipped)
+	}
+}
+
+func TestSkippedUpstream(t *testing.T) {
+	now := time.Now()
+
+	// nixos-unstable landed, but only nixos-unstable and nixos-unstable-small are tracked
+	p := BuildPipeline(map[string]*time.Time{
+		"nixos-unstable":       &now,
+		"nixos-unstable-small": &now,
+	})
+
+	// master, staging-next, staging are unknown but downstream landed → skipped
+	if node := p.NodeMap["master"]; node.Status != StatusSkipped {
+		t.Errorf("master: status = %q, want %q", node.Status, StatusSkipped)
+	}
+	if node := p.NodeMap["staging-next"]; node.Status != StatusSkipped {
+		t.Errorf("staging-next: status = %q, want %q", node.Status, StatusSkipped)
+	}
+	if node := p.NodeMap["staging"]; node.Status != StatusSkipped {
+		t.Errorf("staging: status = %q, want %q", node.Status, StatusSkipped)
+	}
+
+	// nixpkgs-unstable has no data and isn't downstream of nixos-unstable → stays unknown
+	if node := p.NodeMap["nixpkgs-unstable"]; node.Status != StatusUnknown {
+		t.Errorf("nixpkgs-unstable: status = %q, want %q", node.Status, StatusUnknown)
+	}
+}
+
+func TestSkippedDoesNotOverrideLanded(t *testing.T) {
+	now := time.Now()
+
+	// Both staging and master landed
+	p := BuildPipeline(map[string]*time.Time{
+		"staging":      &now,
+		"staging-next": nil, // tracked but not landed
+		"master":       &now,
+	})
+
+	// staging is landed, should NOT be overridden to skipped
+	if node := p.NodeMap["staging"]; node.Status != StatusLanded {
+		t.Errorf("staging: status = %q, want %q", node.Status, StatusLanded)
+	}
+	// staging-next is tracked/pending, should NOT be overridden to skipped
+	if node := p.NodeMap["staging-next"]; node.Status != StatusPending {
+		t.Errorf("staging-next: status = %q, want %q", node.Status, StatusPending)
+	}
 }
 
 func TestAllLanded(t *testing.T) {

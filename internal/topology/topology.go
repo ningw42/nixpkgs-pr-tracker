@@ -9,6 +9,7 @@ const (
 	StatusLanded  NodeStatus = "landed"
 	StatusPending NodeStatus = "pending"
 	StatusUnknown NodeStatus = "unknown"
+	StatusSkipped NodeStatus = "skipped"
 )
 
 // KnownBranches are the 6 nixpkgs branches in the unstable pipeline.
@@ -19,6 +20,19 @@ var KnownBranches = []string{
 	"nixos-unstable-small",
 	"nixos-unstable",
 	"nixpkgs-unstable",
+}
+
+// upstreamOf maps each branch to its direct upstream parent.
+// This encodes the nixpkgs branch topology:
+//
+//	staging → staging-next → master → nixos-unstable-small → nixos-unstable
+//	                         master → nixpkgs-unstable
+var upstreamOf = map[string]string{
+	"staging-next":         "staging",
+	"master":               "staging-next",
+	"nixos-unstable-small": "master",
+	"nixos-unstable":       "nixos-unstable-small",
+	"nixpkgs-unstable":     "master",
 }
 
 // Node represents a single branch in the pipeline.
@@ -37,6 +51,10 @@ type Pipeline struct {
 // BuildPipeline creates a Pipeline from tracked branch data.
 // The input map keys are branch names. A non-nil value means landed (with timestamp),
 // a nil value means pending (tracked but not landed), and absent keys are unknown.
+//
+// If a downstream branch has landed but an upstream branch is unknown (not tracked),
+// the upstream is marked as "skipped" — the PR bypassed it (e.g. merged directly
+// to master without going through staging).
 func BuildPipeline(trackedBranches map[string]*time.Time) Pipeline {
 	known := make(map[string]bool, len(KnownBranches))
 	for _, b := range KnownBranches {
@@ -57,6 +75,25 @@ func BuildPipeline(trackedBranches map[string]*time.Time) Pipeline {
 			p.NodeMap[branch] = Node{Branch: branch, Status: StatusPending}
 		default:
 			p.NodeMap[branch] = Node{Branch: branch, Status: StatusUnknown}
+		}
+	}
+
+	// Mark unknown upstream branches as skipped when a downstream has landed.
+	for _, branch := range KnownBranches {
+		if p.NodeMap[branch].Status != StatusLanded {
+			continue
+		}
+		// Walk upstream and mark unknown ancestors as skipped.
+		cur := branch
+		for {
+			parent, ok := upstreamOf[cur]
+			if !ok {
+				break
+			}
+			if p.NodeMap[parent].Status == StatusUnknown {
+				p.NodeMap[parent] = Node{Branch: parent, Status: StatusSkipped}
+			}
+			cur = parent
 		}
 	}
 
