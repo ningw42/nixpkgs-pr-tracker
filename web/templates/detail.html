@@ -104,12 +104,6 @@
         font-size: 14px;
         font-weight: 500;
       }
-      .pipeline-node .landed-time {
-        font-size: 11px;
-        font-weight: 400;
-        margin-top: 4px;
-        opacity: 0.8;
-      }
       .node-landed {
         background: #dafbe1;
         border: 2px solid #116329;
@@ -147,6 +141,19 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+      }
+      .fork-arrows {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        padding: 4px 0;
+      }
+      .fork-arrows span {
+        font-size: 20px;
+        color: #999;
+        line-height: 1;
+        min-width: 160px;
+        text-align: center;
       }
       .section-title {
         font-size: 16px;
@@ -214,82 +221,40 @@
       <div class="section-title">Branch Pipeline</div>
       <div class="pipeline">
         {{with index .Pipeline.NodeMap "staging"}}
-        <div class="pipeline-node node-{{.Status}}">
-          staging {{if .LandedAt}}
-          <div class="landed-time">
-            <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-              >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-            >
-          </div>
-          {{end}}
-        </div>
+        <div class="pipeline-node node-{{.Status}}">staging</div>
         {{end}}
         <div class="arrow">↓</div>
 
         {{with index .Pipeline.NodeMap "staging-next"}}
-        <div class="pipeline-node node-{{.Status}}">
-          staging-next {{if .LandedAt}}
-          <div class="landed-time">
-            <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-              >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-            >
-          </div>
-          {{end}}
-        </div>
+        <div class="pipeline-node node-{{.Status}}">staging-next</div>
         {{end}}
         <div class="arrow">↓</div>
 
         {{with index .Pipeline.NodeMap "master"}}
-        <div class="pipeline-node node-{{.Status}}">
-          master {{if .LandedAt}}
-          <div class="landed-time">
-            <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-              >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-            >
-          </div>
-          {{end}}
-        </div>
+        <div class="pipeline-node node-{{.Status}}">master</div>
         {{end}}
-        <div class="arrow">↓</div>
+
+        <div class="fork-arrows">
+          <span>↓</span>
+          <span>↓</span>
+        </div>
 
         <div class="fork-row">
           <div class="fork-branch">
             {{with index .Pipeline.NodeMap "nixos-unstable-small"}}
             <div class="pipeline-node node-{{.Status}}">
-              nixos-unstable-small {{if .LandedAt}}
-              <div class="landed-time">
-                <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-                  >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-                >
-              </div>
-              {{end}}
+              nixos-unstable-small
             </div>
             {{end}}
             <div class="arrow">↓</div>
             {{with index .Pipeline.NodeMap "nixos-unstable"}}
-            <div class="pipeline-node node-{{.Status}}">
-              nixos-unstable {{if .LandedAt}}
-              <div class="landed-time">
-                <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-                  >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-                >
-              </div>
-              {{end}}
-            </div>
+            <div class="pipeline-node node-{{.Status}}">nixos-unstable</div>
             {{end}}
           </div>
 
           <div class="fork-branch">
             {{with index .Pipeline.NodeMap "nixpkgs-unstable"}}
-            <div class="pipeline-node node-{{.Status}}">
-              nixpkgs-unstable {{if .LandedAt}}
-              <div class="landed-time">
-                <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-                  >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-                >
-              </div>
-              {{end}}
-            </div>
+            <div class="pipeline-node node-{{.Status}}">nixpkgs-unstable</div>
             {{end}}
           </div>
         </div>
@@ -301,12 +266,7 @@
       <div class="section-title">Other Branches</div>
       <ul class="extra-list">
         {{range .Pipeline.ExtraBranches}}
-        <li class="pipeline-node node-{{.Status}}">
-          {{.Branch}} {{if .LandedAt}} —
-          <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
-            >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
-          >{{end}}
-        </li>
+        <li class="pipeline-node node-{{.Status}}">{{.Branch}}</li>
         {{end}}
       </ul>
     </div>
