@@ -160,3 +160,34 @@ func TestAllKnownBranchesAlwaysPresent(t *testing.T) {
 		}
 	}
 }
+
+func TestIsUpstreamOf(t *testing.T) {
+	tests := []struct {
+		candidate, branch string
+		want              bool
+	}{
+		{"staging", "master", true},
+		{"staging-next", "master", true},
+		{"staging", "staging-next", true},
+		{"master", "nixos-unstable-small", true},
+		{"master", "nixos-unstable", true},
+		{"master", "nixpkgs-unstable", true},
+		{"nixos-unstable-small", "nixos-unstable", true},
+		// Not upstream
+		{"master", "staging", false},
+		{"nixos-unstable", "nixos-unstable-small", false},
+		{"nixpkgs-unstable", "nixos-unstable", false},
+		{"nixos-unstable", "nixpkgs-unstable", false},
+		// Same branch
+		{"master", "master", false},
+		// Unknown branch
+		{"foo", "master", false},
+		{"master", "foo", false},
+	}
+	for _, tt := range tests {
+		got := IsUpstreamOf(tt.candidate, tt.branch)
+		if got != tt.want {
+			t.Errorf("IsUpstreamOf(%q, %q) = %v, want %v", tt.candidate, tt.branch, got, tt.want)
+		}
+	}
+}

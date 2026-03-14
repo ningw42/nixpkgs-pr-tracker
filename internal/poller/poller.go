@@ -9,6 +9,7 @@ import (
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/db"
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/event"
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/github"
+	"github.com/ningw42/nixpkgs-pr-tracker/internal/topology"
 )
 
 type Poller struct {
@@ -149,6 +150,19 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) error {
 
 		for _, branch := range p.branches {
 			if landedBranches[branch] {
+				continue
+			}
+
+			// Skip checking a branch if a downstream branch has already landed.
+			// e.g. if master landed, skip staging and staging-next.
+			skipUpstream := false
+			for downstream := range landedBranches {
+				if topology.IsUpstreamOf(branch, downstream) {
+					skipUpstream = true
+					break
+				}
+			}
+			if skipUpstream {
 				continue
 			}
 

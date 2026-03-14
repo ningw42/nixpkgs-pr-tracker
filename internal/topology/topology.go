@@ -112,3 +112,20 @@ func BuildPipeline(trackedBranches map[string]*time.Time) Pipeline {
 
 	return p
 }
+
+// IsUpstreamOf reports whether candidate is an upstream ancestor of branch
+// in the known topology. For example, IsUpstreamOf("staging", "master") is true
+// because staging → staging-next → master.
+func IsUpstreamOf(candidate, branch string) bool {
+	cur := branch
+	for {
+		parent, ok := upstreamOf[cur]
+		if !ok {
+			return false
+		}
+		if parent == candidate {
+			return true
+		}
+		cur = parent
+	}
+}

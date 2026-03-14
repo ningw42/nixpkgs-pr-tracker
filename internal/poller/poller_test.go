@@ -452,6 +452,49 @@ func TestRunPollCycleBackoffContextCancel(t *testing.T) {
 	}
 }
 
+func TestPollSkipsUpstreamBranches(t *testing.T) {
+	// Track staging, staging-next, master, and nixos-unstable.
+	// master has already landed, so staging and staging-next should be skipped.
+	env := setupPoller(t, []string{"staging", "staging-next", "master", "nixos-unstable"})
+
+	env.db.AddPR(50)
+	env.db.UpdatePRStatus(50, "merged", "commitXYZ", "Skip Upstream", "alice")
+	env.db.UpdateBranchLanded(50, "master") // master already landed
+
+	var compareMu sync.Mutex
+	checkedBranches := make(map[string]bool)
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/compare/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract branch name from URL: /repos/NixOS/nixpkgs/compare/{branch}...{commit}
+		path := r.URL.Path
+		// path looks like /repos/NixOS/nixpkgs/compare/nixos-unstable...commitXYZ
+		branch := path[len("/repos/NixOS/nixpkgs/compare/"):]
+		if idx := len(branch) - len("...commitXYZ"); idx > 0 {
+			branch = branch[:idx]
+		}
+		compareMu.Lock()
+		checkedBranches[branch] = true
+		compareMu.Unlock()
+		json.NewEncoder(w).Encode(map[string]any{"status": "ahead"}) // not landed
+	})
+
+	env.p.poll(context.Background())
+
+	compareMu.Lock()
+	defer compareMu.Unlock()
+
+	// staging and staging-next are upstream of master, should be skipped
+	if checkedBranches["staging"] {
+		t.Error("staging should have been skipped (upstream of landed master)")
+	}
+	if checkedBranches["staging-next"] {
+		t.Error("staging-next should have been skipped (upstream of landed master)")
+	}
+	// nixos-unstable should still be checked
+	if !checkedBranches["nixos-unstable"] {
+		t.Error("nixos-unstable should have been checked")
+	}
+}
+
 func TestRunPollCycleResetInPast(t *testing.T) {
 	env := setupPoller(t, []string{"nixos-unstable"})
 
