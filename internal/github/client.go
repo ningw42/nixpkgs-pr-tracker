@@ -57,9 +57,7 @@ func (c *Client) doRequest(ctx context.Context, url string) (*http.Response, err
 		return nil, err
 	}
 	if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining != "" {
-		if n, err := strconv.Atoi(remaining); err == nil && n < 100 {
-			log.Printf("GitHub API rate limit low: %d remaining", n)
-		}
+		log.Printf("GitHub API rate limit: %s remaining", remaining)
 	}
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
 		if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining == "0" {
