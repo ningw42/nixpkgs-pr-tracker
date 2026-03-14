@@ -11,6 +11,7 @@ import (
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/db"
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/event"
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/github"
+	"github.com/ningw42/nixpkgs-pr-tracker/internal/topology"
 )
 
 type Server struct {
@@ -31,9 +32,15 @@ func New(database *db.DB, gh *github.Client, bus *event.Bus, branches []string, 
 	}
 }
 
+type PRDetailData struct {
+	PR       *db.TrackedPR
+	Pipeline topology.Pipeline
+}
+
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.handleIndex)
+	mux.HandleFunc("GET /pr/{number}", s.handlePRDetail)
 	mux.HandleFunc("POST /api/prs", s.handleAddPR)
 	mux.HandleFunc("GET /api/prs", s.handleListPRs)
 	mux.HandleFunc("DELETE /api/prs/{number}", s.handleDeletePR)
@@ -56,6 +63,36 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", prs); err != nil {
 		log.Printf("server: rendering template: %v", err)
+	}
+}
+
+func (s *Server) handlePRDetail(w http.ResponseWriter, r *http.Request) {
+	numStr := r.PathValue("number")
+	num, err := strconv.Atoi(numStr)
+	if err != nil || num <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	pr, err := s.db.GetPR(num)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	trackedBranches := make(map[string]*time.Time, len(pr.Branches))
+	for _, bs := range pr.Branches {
+		trackedBranches[bs.Branch] = bs.LandedAt
+	}
+
+	data := PRDetailData{
+		PR:       pr,
+		Pipeline: topology.BuildPipeline(trackedBranches),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(w, "detail.html", data); err != nil {
+		log.Printf("server: rendering detail template: %v", err)
 	}
 }
 

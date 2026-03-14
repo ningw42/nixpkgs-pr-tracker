@@ -170,11 +170,7 @@
         {{if .}} {{range .}}
         <tr id="pr-{{.PRNumber}}">
           <td>
-            <a
-              href="https://github.com/NixOS/nixpkgs/pull/{{.PRNumber}}"
-              target="_blank"
-              >#{{.PRNumber}}</a
-            >
+            <a href="/pr/{{.PRNumber}}">#{{.PRNumber}}</a>
           </td>
           <td>{{.Title}}</td>
           <td>{{.Author}}</td>

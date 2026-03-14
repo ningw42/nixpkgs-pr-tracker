@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PR #{{.PR.PRNumber}} — nixpkgs PR Tracker</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f5f5f5;
+        color: #333;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      a {
+        color: #0969da;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .pr-header {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .pr-header h1 {
+        font-size: 24px;
+      }
+      .pr-title {
+        font-size: 18px;
+        color: #555;
+        margin-bottom: 8px;
+      }
+      .pr-author {
+        font-size: 14px;
+        color: #666;
+      }
+      .status {
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .status-open {
+        background: #dafbe1;
+        color: #116329;
+      }
+      .status-merged {
+        background: #ddf4ff;
+        color: #0550ae;
+      }
+      .status-closed {
+        background: #fdd;
+        color: #900;
+      }
+      .metadata {
+        font-size: 14px;
+        color: #555;
+      }
+      .metadata span {
+        margin-right: 20px;
+      }
+      .metadata code {
+        background: #f0f0f0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 13px;
+      }
+
+      /* Pipeline visualization */
+      .pipeline {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 0;
+      }
+      .pipeline-node {
+        padding: 10px 20px;
+        border-radius: 6px;
+        text-align: center;
+        min-width: 160px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .pipeline-node .landed-time {
+        font-size: 11px;
+        font-weight: 400;
+        margin-top: 4px;
+        opacity: 0.8;
+      }
+      .node-landed {
+        background: #dafbe1;
+        border: 2px solid #116329;
+        color: #116329;
+      }
+      .node-pending {
+        background: #f6f8fa;
+        border: 2px solid #999;
+        color: #555;
+      }
+      .node-unknown {
+        background: #fafafa;
+        border: 2px dashed #ccc;
+        color: #aaa;
+      }
+      .arrow {
+        font-size: 20px;
+        color: #999;
+        line-height: 1;
+        padding: 4px 0;
+      }
+      .fork-row {
+        display: flex;
+        gap: 40px;
+        justify-content: center;
+      }
+      .fork-branch {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .extra-list {
+        list-style: none;
+      }
+      .extra-list li {
+        padding: 6px 12px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+        font-size: 14px;
+        display: inline-block;
+        margin-right: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="/" class="back-link">← Back to dashboard</a>
+
+    <div class="card">
+      <div class="pr-header">
+        <h1>
+          <a
+            href="https://github.com/NixOS/nixpkgs/pull/{{.PR.PRNumber}}"
+            target="_blank"
+            >PR #{{.PR.PRNumber}}</a
+          >
+        </h1>
+        <span class="status status-{{.PR.Status}}">{{.PR.Status}}</span>
+      </div>
+      <div class="pr-title">{{.PR.Title}}</div>
+      <div class="pr-author">by {{.PR.Author}}</div>
+    </div>
+
+    <div class="card">
+      <div class="metadata">
+        {{if .PR.MergeCommit}}<span
+          >Merge commit:
+          <a
+            href="https://github.com/NixOS/nixpkgs/commit/{{.PR.MergeCommit}}"
+            target="_blank"
+            ><code>{{.PR.MergeCommit}}</code></a
+          ></span
+        >{{end}}
+        <span
+          >Tracked since:
+          <time datetime="{{.PR.CreatedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+            >{{.PR.CreatedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+          ></span
+        >
+        {{if not .PR.LastCheckedAt.IsZero}}<span
+          >Last checked:
+          <time
+            datetime="{{.PR.LastCheckedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+            >{{.PR.LastCheckedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+          ></span
+        >{{end}}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Branch Pipeline</div>
+      <div class="pipeline">
+        {{with index .Pipeline.NodeMap "staging"}}
+        <div class="pipeline-node node-{{.Status}}">
+          staging {{if .LandedAt}}
+          <div class="landed-time">
+            <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+              >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+            >
+          </div>
+          {{end}}
+        </div>
+        {{end}}
+        <div class="arrow">↓</div>
+
+        {{with index .Pipeline.NodeMap "staging-next"}}
+        <div class="pipeline-node node-{{.Status}}">
+          staging-next {{if .LandedAt}}
+          <div class="landed-time">
+            <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+              >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+            >
+          </div>
+          {{end}}
+        </div>
+        {{end}}
+        <div class="arrow">↓</div>
+
+        {{with index .Pipeline.NodeMap "master"}}
+        <div class="pipeline-node node-{{.Status}}">
+          master {{if .LandedAt}}
+          <div class="landed-time">
+            <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+              >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+            >
+          </div>
+          {{end}}
+        </div>
+        {{end}}
+        <div class="arrow">↓</div>
+
+        <div class="fork-row">
+          <div class="fork-branch">
+            {{with index .Pipeline.NodeMap "nixos-unstable-small"}}
+            <div class="pipeline-node node-{{.Status}}">
+              nixos-unstable-small {{if .LandedAt}}
+              <div class="landed-time">
+                <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+                  >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+                >
+              </div>
+              {{end}}
+            </div>
+            {{end}}
+            <div class="arrow">↓</div>
+            {{with index .Pipeline.NodeMap "nixos-unstable"}}
+            <div class="pipeline-node node-{{.Status}}">
+              nixos-unstable {{if .LandedAt}}
+              <div class="landed-time">
+                <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+                  >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+                >
+              </div>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+
+          <div class="fork-branch">
+            {{with index .Pipeline.NodeMap "nixpkgs-unstable"}}
+            <div class="pipeline-node node-{{.Status}}">
+              nixpkgs-unstable {{if .LandedAt}}
+              <div class="landed-time">
+                <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+                  >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+                >
+              </div>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {{if .Pipeline.ExtraBranches}}
+    <div class="card">
+      <div class="section-title">Other Branches</div>
+      <ul class="extra-list">
+        {{range .Pipeline.ExtraBranches}}
+        <li class="pipeline-node node-{{.Status}}">
+          {{.Branch}} {{if .LandedAt}} —
+          <time datetime="{{.LandedAt.UTC.Format `2006-01-02T15:04:05Z`}}"
+            >{{.LandedAt.UTC.Format `2006-01-02 15:04:05`}}</time
+          >{{end}}
+        </li>
+        {{end}}
+      </ul>
+    </div>
+    {{end}}
+
+    <script>
+      document.querySelectorAll("time[datetime]").forEach(function (el) {
+        var d = new Date(el.getAttribute("datetime"));
+        if (!isNaN(d)) {
+          var pad = function (n) {
+            return n < 10 ? "0" + n : n;
+          };
+          el.textContent =
+            d.getFullYear() +
+            "-" +
+            pad(d.getMonth() + 1) +
+            "-" +
+            pad(d.getDate()) +
+            " " +
+            pad(d.getHours()) +
+            ":" +
+            pad(d.getMinutes()) +
+            ":" +
+            pad(d.getSeconds());
+        }
+      });
+    </script>
+  </body>
+</html>

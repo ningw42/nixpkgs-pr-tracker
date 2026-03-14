@@ -14,7 +14,7 @@ import (
 	"github.com/ningw42/nixpkgs-pr-tracker/internal/github"
 )
 
-const testTemplate = `{{define "index.html"}}<!DOCTYPE html><html><body>{{if .}}{{range .}}#{{.PRNumber}}{{end}}{{else}}empty{{end}}</body></html>{{end}}`
+const testTemplate = `{{define "index.html"}}<!DOCTYPE html><html><body>{{if .}}{{range .}}#{{.PRNumber}}{{end}}{{else}}empty{{end}}</body></html>{{end}}{{define "detail.html"}}<!DOCTYPE html><html><body>PR #{{.PR.PRNumber}} {{.PR.Title}}</body></html>{{end}}`
 
 type testEnv struct {
 	db     *db.DB
@@ -393,6 +393,51 @@ func TestNotFoundPage(t *testing.T) {
 	env := setupTest(t, []string{"nixos-unstable"})
 
 	req := httptest.NewRequest("GET", "/nonexistent", nil)
+	w := httptest.NewRecorder()
+	env.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestPRDetailPage(t *testing.T) {
+	env := setupTest(t, []string{"nixos-unstable"})
+
+	env.db.AddPR(100)
+	env.db.UpdatePRStatus(100, "open", "", "Detail Test", "alice")
+
+	req := httptest.NewRequest("GET", "/pr/100", nil)
+	w := httptest.NewRecorder()
+	env.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "PR #100") {
+		t.Error("expected 'PR #100' in response")
+	}
+	if !strings.Contains(w.Body.String(), "Detail Test") {
+		t.Error("expected PR title in response")
+	}
+}
+
+func TestPRDetailPageNotFound(t *testing.T) {
+	env := setupTest(t, []string{"nixos-unstable"})
+
+	req := httptest.NewRequest("GET", "/pr/99999", nil)
+	w := httptest.NewRecorder()
+	env.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestPRDetailPageInvalidNumber(t *testing.T) {
+	env := setupTest(t, []string{"nixos-unstable"})
+
+	req := httptest.NewRequest("GET", "/pr/abc", nil)
 	w := httptest.NewRecorder()
 	env.router.ServeHTTP(w, req)
 
