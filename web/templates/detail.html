@@ -88,21 +88,21 @@
         border-radius: 3px;
         font-size: 13px;
       }
-
-      /* Pipeline visualization */
-      .pipeline {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 20px 0;
+      .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
       }
-      .pipeline-node {
-        padding: 10px 20px;
-        border-radius: 6px;
-        text-align: center;
-        min-width: 160px;
+      .extra-list {
+        list-style: none;
+      }
+      .extra-list li {
+        padding: 6px 12px;
+        margin-bottom: 4px;
+        border-radius: 4px;
         font-size: 14px;
-        font-weight: 500;
+        display: inline-block;
+        margin-right: 8px;
       }
       .node-landed {
         background: #dafbe1;
@@ -125,51 +125,9 @@
         color: #bbb;
         text-decoration: line-through;
       }
-      .arrow {
-        font-size: 20px;
-        color: #999;
-        line-height: 1;
-        padding: 4px 0;
-      }
-      .fork-row {
-        display: flex;
-        gap: 40px;
-        justify-content: center;
-        align-items: flex-start;
-      }
-      .fork-branch {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      .fork-arrows {
+      .mermaid {
         display: flex;
         justify-content: center;
-        gap: 40px;
-        padding: 4px 0;
-      }
-      .fork-arrows span {
-        font-size: 20px;
-        color: #999;
-        line-height: 1;
-        min-width: 160px;
-        text-align: center;
-      }
-      .section-title {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 12px;
-      }
-      .extra-list {
-        list-style: none;
-      }
-      .extra-list li {
-        padding: 6px 12px;
-        margin-bottom: 4px;
-        border-radius: 4px;
-        font-size: 14px;
-        display: inline-block;
-        margin-right: 8px;
       }
     </style>
   </head>
@@ -219,46 +177,26 @@
 
     <div class="card">
       <div class="section-title">Branch Pipeline</div>
-      <div class="pipeline">
-        {{with index .Pipeline.NodeMap "staging"}}
-        <div class="pipeline-node node-{{.Status}}">staging</div>
-        {{end}}
-        <div class="arrow">↓</div>
+      <pre class="mermaid">
+flowchart TD
+    staging["staging"] --> staging_next["staging-next"]
+    staging_next --> master["master"]
+    master --> nixos_unstable_small["nixos-unstable-small"]
+    nixos_unstable_small --> nixos_unstable["nixos-unstable"]
+    master --> nixpkgs_unstable["nixpkgs-unstable"]
 
-        {{with index .Pipeline.NodeMap "staging-next"}}
-        <div class="pipeline-node node-{{.Status}}">staging-next</div>
-        {{end}}
-        <div class="arrow">↓</div>
+    classDef landed fill:#dafbe1,stroke:#116329,stroke-width:2px,color:#116329
+    classDef pending fill:#f6f8fa,stroke:#999,stroke-width:2px,color:#555
+    classDef unknown fill:#fafafa,stroke:#ccc,stroke-width:2px,stroke-dasharray:5 5,color:#aaa
+    classDef skipped fill:#fafafa,stroke:#ccc,stroke-width:2px,stroke-dasharray:5 5,color:#bbb,text-decoration:line-through
 
-        {{with index .Pipeline.NodeMap "master"}}
-        <div class="pipeline-node node-{{.Status}}">master</div>
-        {{end}}
-
-        <div class="fork-arrows">
-          <span>↓</span>
-          <span>↓</span>
-        </div>
-
-        <div class="fork-row">
-          <div class="fork-branch">
-            {{with index .Pipeline.NodeMap "nixos-unstable-small"}}
-            <div class="pipeline-node node-{{.Status}}">
-              nixos-unstable-small
-            </div>
-            {{end}}
-            <div class="arrow">↓</div>
-            {{with index .Pipeline.NodeMap "nixos-unstable"}}
-            <div class="pipeline-node node-{{.Status}}">nixos-unstable</div>
-            {{end}}
-          </div>
-
-          <div class="fork-branch">
-            {{with index .Pipeline.NodeMap "nixpkgs-unstable"}}
-            <div class="pipeline-node node-{{.Status}}">nixpkgs-unstable</div>
-            {{end}}
-          </div>
-        </div>
-      </div>
+    class staging {{with index .Pipeline.NodeMap "staging"}}{{.Status}}{{end}}
+    class staging_next {{with index .Pipeline.NodeMap "staging-next"}}{{.Status}}{{end}}
+    class master {{with index .Pipeline.NodeMap "master"}}{{.Status}}{{end}}
+    class nixos_unstable_small {{with index .Pipeline.NodeMap "nixos-unstable-small"}}{{.Status}}{{end}}
+    class nixos_unstable {{with index .Pipeline.NodeMap "nixos-unstable"}}{{.Status}}{{end}}
+    class nixpkgs_unstable {{with index .Pipeline.NodeMap "nixpkgs-unstable"}}{{.Status}}{{end}}
+      </pre>
     </div>
 
     {{if .Pipeline.ExtraBranches}}
@@ -266,7 +204,7 @@
       <div class="section-title">Other Branches</div>
       <ul class="extra-list">
         {{range .Pipeline.ExtraBranches}}
-        <li class="pipeline-node node-{{.Status}}">{{.Branch}}</li>
+        <li class="node-{{.Status}}">{{.Branch}}</li>
         {{end}}
       </ul>
     </div>
@@ -292,6 +230,16 @@
             ":" +
             pad(d.getSeconds());
         }
+      });
+    </script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "neutral",
+        flowchart: {
+          useMaxWidth: false,
+        },
       });
     </script>
   </body>
