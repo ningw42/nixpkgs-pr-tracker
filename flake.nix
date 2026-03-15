@@ -46,6 +46,14 @@
                 enable = true;
                 packageOverrides.treefmt = treefmtEval.${system}.config.build.wrapper;
               };
+              check-merge-conflicts.enable = true;
+              detect-private-keys.enable = true;
+              mixed-line-endings = {
+                enable = true;
+                args = [ "--fix=lf" ];
+              };
+              trim-trailing-whitespace.enable = true;
+              convco.enable = true;
             };
           };
         }
