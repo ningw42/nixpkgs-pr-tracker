@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
-```bash
-go build -o nixpkgs-pr-tracker .    # build
-go run .                             # run directly
-go test ./...                        # run all tests
-go test ./internal/db/               # run tests for a single package
-```
+`go` is not on the system PATH — all Go commands must be run via the Nix flake dev shell:
 
-Dev shell via Nix: `nix develop` (provides go, gopls, gotools).
+```bash
+nix develop --command go build -o nixpkgs-pr-tracker .    # build
+nix develop --command go run .                             # run directly
+nix develop --command go test ./...                        # run all tests
+nix develop --command go test ./internal/db/               # run tests for a single package
+```
 
 ## Configuration
 

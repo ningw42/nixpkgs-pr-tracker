@@ -47,7 +47,7 @@ All configuration is via environment variables:
 
 ```bash
 export NPT_GITHUB_TOKEN="ghp_..."
-export NPT_BRANCHES="nixos-unstable,nixos-24.11"
+export NPT_BRANCHES="staging,staging-next,master,nixos-unstable-small,nixos-unstable,nixpkgs-unstable"
 export NPT_POLL_INTERVAL="2m"
 export NPT_WEBHOOK_URL="https://telepush.example.com/api/inlets/nixpkgs-pr-tracker/your-token"
 ./nixpkgs-pr-tracker
