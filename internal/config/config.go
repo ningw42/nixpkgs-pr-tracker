@@ -1,9 +1,12 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/ningw42/nixpkgs-pr-tracker/internal/topology"
 )
 
 type Config struct {
@@ -45,4 +48,22 @@ func Load() Config {
 	}
 
 	return cfg
+}
+
+// ValidateBranches checks that all branches are in topology.KnownBranches.
+func ValidateBranches(branches []string) error {
+	known := make(map[string]bool, len(topology.KnownBranches))
+	for _, b := range topology.KnownBranches {
+		known[b] = true
+	}
+	var unknown []string
+	for _, b := range branches {
+		if !known[b] {
+			unknown = append(unknown, b)
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown branches: %v", unknown)
+	}
+	return nil
 }

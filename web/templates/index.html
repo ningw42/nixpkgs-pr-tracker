@@ -114,12 +114,37 @@
         background: #fdd;
         color: #900;
       }
-      .branch-yes {
-        color: #116329;
+      .branch-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
         font-weight: 500;
+        margin: 1px 2px;
       }
-      .branch-no {
-        color: #999;
+      .branch-staging {
+        background: #fde2e2;
+        color: #9a1b1b;
+      }
+      .branch-staging-next {
+        background: #fde8cd;
+        color: #8a4b08;
+      }
+      .branch-master {
+        background: #fff3cd;
+        color: #6d5507;
+      }
+      .branch-nixos-unstable-small {
+        background: #ccfbf1;
+        color: #115e59;
+      }
+      .branch-nixos-unstable {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      .branch-nixpkgs-unstable {
+        background: #ede9fe;
+        color: #5b21b6;
       }
       .delete-btn {
         background: none;
@@ -176,9 +201,11 @@
           <td>{{.Author}}</td>
           <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
           <td>
-            {{range .Branches}} {{if .Landed}}<span class="branch-yes"
+            {{range .Branches}}{{if .Landed}}<span
+              class="branch-pill branch-{{.Branch}}"
               >{{.Branch}}</span
-            >{{else}}<span class="branch-no">{{.Branch}}</span>{{end}} {{end}}
+            >
+            {{end}}{{end}}
           </td>
           <td>
             {{if .LastCheckedAt.IsZero}}-{{else}}

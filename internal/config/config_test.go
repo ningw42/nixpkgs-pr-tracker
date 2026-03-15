@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,5 +82,27 @@ func TestLoadBranchSplitting(t *testing.T) {
 		if cfg.Branches[i] != b {
 			t.Errorf("Branches[%d] = %q, want %q", i, cfg.Branches[i], b)
 		}
+	}
+}
+
+func TestValidateBranchesAllValid(t *testing.T) {
+	if err := ValidateBranches([]string{"nixos-unstable", "master", "staging"}); err != nil {
+		t.Errorf("ValidateBranches returned error for known branches: %v", err)
+	}
+}
+
+func TestValidateBranchesUnknown(t *testing.T) {
+	err := ValidateBranches([]string{"nixos-unstable", "foobar"})
+	if err == nil {
+		t.Fatal("ValidateBranches returned nil, want error for unknown branch")
+	}
+	if !strings.Contains(err.Error(), "foobar") {
+		t.Errorf("error %q does not mention unknown branch 'foobar'", err)
+	}
+}
+
+func TestValidateBranchesEmpty(t *testing.T) {
+	if err := ValidateBranches([]string{}); err != nil {
+		t.Errorf("ValidateBranches returned error for empty list: %v", err)
 	}
 }

@@ -26,6 +26,10 @@ var templateFS embed.FS
 func main() {
 	cfg := config.Load()
 
+	if err := config.ValidateBranches(cfg.Branches); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
+
 	database, err := db.New(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("opening database: %v", err)
