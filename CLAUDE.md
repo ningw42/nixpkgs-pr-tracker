@@ -35,18 +35,20 @@ A Go web service that tracks NixOS/nixpkgs pull requests and monitors whether th
 ### Key packages
 
 - **`main.go`** — Wires everything together: config, DB, GitHub client, event bus, poller, and HTTP server. Embeds HTML templates via `//go:embed`.
-- **`internal/config`** — Loads config from env vars with defaults.
+- **`internal/config`** — Loads config from env vars with defaults. Validates configured branches against `topology.KnownBranches` at startup.
 - **`internal/db`** — SQLite persistence layer (uses `modernc.org/sqlite`, a pure-Go driver — no CGO). Two tables: `tracked_prs` and `branch_status`. Auto-migrates on startup.
 - **`internal/github`** — GitHub API client. Fetches PR info and checks if a commit exists in a branch via the compare API. Hardcoded to `NixOS/nixpkgs` repo.
 - **`internal/poller`** — Background goroutine that periodically polls all tracked PRs. Updates status (open→merged→closed), checks branch landing, and auto-removes PRs that have landed everywhere.
 - **`internal/event`** — Simple in-process pub/sub event bus. Event types: `pr_added`, `pr_removed`, `pr_merged`, `pr_landed_branch`.
 - **`internal/notifier`** — `Notifier` interface + webhook implementation. Subscribes to the event bus and POSTs JSON payloads.
-- **`internal/server`** — HTTP handlers. Serves the HTML UI at `/` and a JSON API (`POST /api/prs`, `GET /api/prs`, `DELETE /api/prs/{number}`).
+- **`internal/topology`** — Defines the nixpkgs branch topology (6 known branches and their upstream relationships). Builds a pipeline view with landed/pending/skipped status for the PR detail page.
+- **`internal/server`** — HTTP handlers. Serves the HTML UI at `/`, a PR detail page at `/pr/{number}`, and a JSON API (`POST /api/prs`, `GET /api/prs`, `DELETE /api/prs/{number}`).
 - **`web/templates/`** — Go HTML templates embedded at compile time.
 
 ### API endpoints
 
 - `GET /` — HTML dashboard
+- `GET /pr/{number}` — PR detail page with branch topology visualization
 - `POST /api/prs` — Add a PR to track (body: `{"pr_number": 123}`)
 - `GET /api/prs` — List tracked PRs as JSON
 - `DELETE /api/prs/{number}` — Remove a tracked PR

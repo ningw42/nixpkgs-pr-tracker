@@ -17,15 +17,14 @@ After a nixpkgs PR is merged, it can take days or weeks for the commit to propag
 ## Quick start
 
 ```bash
-# Build
-go build -o nixpkgs-pr-tracker .
+# Build (requires Nix)
+nix develop --command go build -o nixpkgs-pr-tracker .
 
 # Run with defaults (listens on :8585, tracks nixos-unstable)
 ./nixpkgs-pr-tracker
 
-# Or with Nix
-nix develop
-go run .
+# Or run directly
+nix develop --command go run .
 ```
 
 Open http://localhost:8585 in your browser to use the dashboard.
@@ -109,7 +108,10 @@ A [Telepush](https://github.com/muety/telepush) custom inlet is included at [`ni
 ## Development
 
 ```bash
-nix develop              # enter dev shell (provides go, gopls, gotools)
-go test ./...            # run all tests
-go test -race ./...      # run tests with race detector
+nix develop                                  # enter dev shell (provides go, gopls, gotools)
+go test ./...                                # run all tests (inside dev shell)
+go test -race ./...                          # run tests with race detector
+
+# Or without entering the shell:
+nix develop --command go test ./...
 ```
