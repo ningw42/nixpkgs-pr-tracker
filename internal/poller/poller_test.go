@@ -24,7 +24,7 @@ type pollerEnv struct {
 	p     *Poller
 }
 
-func setupPoller(t *testing.T, branches []string) *pollerEnv {
+func setupPoller(t *testing.T, notificationBranches []string, targetBranches ...[]string) *pollerEnv {
 	t.Helper()
 
 	dsn := "file:" + t.Name() + "?mode=memory&cache=shared"
@@ -43,7 +43,11 @@ func setupPoller(t *testing.T, branches []string) *pollerEnv {
 
 	bus := event.New()
 
-	p := New(database, ghClient, bus, time.Hour, branches)
+	tb := notificationBranches
+	if len(targetBranches) > 0 {
+		tb = targetBranches[0]
+	}
+	p := New(database, ghClient, bus, time.Hour, notificationBranches, tb)
 
 	return &pollerEnv{
 		db:    database,
@@ -514,5 +518,33 @@ func TestRunPollCycleResetInPast(t *testing.T) {
 	// Should return immediately since reset is in the past
 	if elapsed > 500*time.Millisecond {
 		t.Errorf("runPollCycle took %v for past reset time, expected immediate return", elapsed)
+	}
+}
+
+func TestPollTargetBranchesAutoRemove(t *testing.T) {
+	// Track staging + nixos-unstable as notification branches,
+	// but only nixos-unstable is a target branch.
+	// PR lands in nixos-unstable but not staging → should be auto-removed.
+	env := setupPoller(t,
+		[]string{"staging", "nixos-unstable"},
+		[]string{"nixos-unstable"},
+	)
+
+	env.db.AddPR(60)
+	env.db.UpdatePRStatus(60, "merged", "commitFIN", "Target Branch Test", "alice")
+
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/compare/staging...commitFIN", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"status": "ahead"}) // not landed
+	})
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/compare/nixos-unstable...commitFIN", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"status": "behind"}) // landed
+	})
+
+	env.p.poll(context.Background())
+
+	// PR should be auto-removed because nixos-unstable (the only target branch) has landed
+	_, err := env.db.GetPR(60)
+	if err == nil {
+		t.Error("expected PR to be auto-removed after landing in all target branches")
 	}
 }

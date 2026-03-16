@@ -6,8 +6,36 @@ import (
 	"time"
 )
 
+func TestLoadRequiresTargetBranches(t *testing.T) {
+	// NPT_TARGET_BRANCHES not set → error
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should return error when NPT_TARGET_BRANCHES is not set")
+	}
+	if !strings.Contains(err.Error(), "NPT_TARGET_BRANCHES") {
+		t.Errorf("error %q should mention NPT_TARGET_BRANCHES", err)
+	}
+}
+
+func TestLoadTargetBranchesOnlyWhitespace(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", " , , ")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should return error for whitespace-only NPT_TARGET_BRANCHES")
+	}
+	if !strings.Contains(err.Error(), "NPT_TARGET_BRANCHES") {
+		t.Errorf("error %q should mention NPT_TARGET_BRANCHES", err)
+	}
+}
+
 func TestLoadDefaults(t *testing.T) {
-	cfg := Load()
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
 
 	if cfg.ListenAddr != ":8585" {
 		t.Errorf("ListenAddr = %q, want %q", cfg.ListenAddr, ":8585")
@@ -24,8 +52,12 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.PollInterval != 5*time.Minute {
 		t.Errorf("PollInterval = %v, want %v", cfg.PollInterval, 5*time.Minute)
 	}
-	if len(cfg.Branches) != 1 || cfg.Branches[0] != "nixos-unstable" {
-		t.Errorf("Branches = %v, want [nixos-unstable]", cfg.Branches)
+	if len(cfg.TargetBranches) != 1 || cfg.TargetBranches[0] != "nixos-unstable" {
+		t.Errorf("TargetBranches = %v, want [nixos-unstable]", cfg.TargetBranches)
+	}
+	// NotificationBranches defaults to TargetBranches when not set
+	if len(cfg.NotificationBranches) != 1 || cfg.NotificationBranches[0] != "nixos-unstable" {
+		t.Errorf("NotificationBranches = %v, want [nixos-unstable]", cfg.NotificationBranches)
 	}
 }
 
@@ -35,9 +67,13 @@ func TestLoadAllOverrides(t *testing.T) {
 	t.Setenv("NPT_GITHUB_TOKEN", "ghp_test123")
 	t.Setenv("NPT_WEBHOOK_URL", "https://example.com/hook")
 	t.Setenv("NPT_POLL_INTERVAL", "30s")
-	t.Setenv("NPT_BRANCHES", "nixos-unstable,nixos-24.11")
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable")
+	t.Setenv("NPT_NOTIFICATION_BRANCHES", "staging,nixos-unstable")
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
 
 	if cfg.ListenAddr != ":9090" {
 		t.Errorf("ListenAddr = %q, want %q", cfg.ListenAddr, ":9090")
@@ -54,34 +90,60 @@ func TestLoadAllOverrides(t *testing.T) {
 	if cfg.PollInterval != 30*time.Second {
 		t.Errorf("PollInterval = %v, want %v", cfg.PollInterval, 30*time.Second)
 	}
-	if len(cfg.Branches) != 2 || cfg.Branches[0] != "nixos-unstable" || cfg.Branches[1] != "nixos-24.11" {
-		t.Errorf("Branches = %v, want [nixos-unstable nixos-24.11]", cfg.Branches)
+	if len(cfg.TargetBranches) != 1 || cfg.TargetBranches[0] != "nixos-unstable" {
+		t.Errorf("TargetBranches = %v, want [nixos-unstable]", cfg.TargetBranches)
+	}
+	if len(cfg.NotificationBranches) != 2 || cfg.NotificationBranches[0] != "staging" || cfg.NotificationBranches[1] != "nixos-unstable" {
+		t.Errorf("NotificationBranches = %v, want [staging nixos-unstable]", cfg.NotificationBranches)
 	}
 }
 
 func TestLoadInvalidPollInterval(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable")
 	t.Setenv("NPT_POLL_INTERVAL", "notaduration")
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
 
 	if cfg.PollInterval != 5*time.Minute {
 		t.Errorf("PollInterval = %v, want default %v for invalid input", cfg.PollInterval, 5*time.Minute)
 	}
 }
 
-func TestLoadBranchSplitting(t *testing.T) {
-	t.Setenv("NPT_BRANCHES", "a,b,c")
+func TestLoadTargetBranchSplitting(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", "a,b,c")
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
 
 	want := []string{"a", "b", "c"}
-	if len(cfg.Branches) != len(want) {
-		t.Fatalf("Branches length = %d, want %d", len(cfg.Branches), len(want))
+	if len(cfg.TargetBranches) != len(want) {
+		t.Fatalf("TargetBranches length = %d, want %d", len(cfg.TargetBranches), len(want))
 	}
 	for i, b := range want {
-		if cfg.Branches[i] != b {
-			t.Errorf("Branches[%d] = %q, want %q", i, cfg.Branches[i], b)
+		if cfg.TargetBranches[i] != b {
+			t.Errorf("TargetBranches[%d] = %q, want %q", i, cfg.TargetBranches[i], b)
 		}
+	}
+}
+
+func TestLoadTrimsWhitespaceAndFiltersEmpty(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", " nixos-unstable , staging ,, ")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if len(cfg.TargetBranches) != 2 {
+		t.Fatalf("TargetBranches = %v, want 2 entries", cfg.TargetBranches)
+	}
+	if cfg.TargetBranches[0] != "nixos-unstable" || cfg.TargetBranches[1] != "staging" {
+		t.Errorf("TargetBranches = %v, want [nixos-unstable staging]", cfg.TargetBranches)
 	}
 }
 
@@ -104,5 +166,77 @@ func TestValidateBranchesUnknown(t *testing.T) {
 func TestValidateBranchesEmpty(t *testing.T) {
 	if err := ValidateBranches([]string{}); err != nil {
 		t.Errorf("ValidateBranches returned error for empty list: %v", err)
+	}
+}
+
+func TestNotificationBranchesDefaultsToTarget(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable,nixos-24.11")
+	// NPT_NOTIFICATION_BRANCHES not set
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if len(cfg.NotificationBranches) != 2 || cfg.NotificationBranches[0] != "nixos-unstable" || cfg.NotificationBranches[1] != "nixos-24.11" {
+		t.Errorf("NotificationBranches = %v, want [nixos-unstable nixos-24.11] (should default to target)", cfg.NotificationBranches)
+	}
+}
+
+func TestNotificationBranchesDefaultIsIndependent(t *testing.T) {
+	// When notification branches default to target branches, they should be
+	// independent slices (not aliased) to prevent future mutation bugs.
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// Mutate one and verify the other is unaffected
+	cfg.NotificationBranches[0] = "mutated"
+	if cfg.TargetBranches[0] == "mutated" {
+		t.Error("NotificationBranches and TargetBranches share the same underlying slice")
+	}
+}
+
+func TestNotificationBranchesExplicit(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable")
+	t.Setenv("NPT_NOTIFICATION_BRANCHES", "staging,nixos-unstable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if len(cfg.TargetBranches) != 1 || cfg.TargetBranches[0] != "nixos-unstable" {
+		t.Errorf("TargetBranches = %v, want [nixos-unstable]", cfg.TargetBranches)
+	}
+	if len(cfg.NotificationBranches) != 2 || cfg.NotificationBranches[0] != "staging" || cfg.NotificationBranches[1] != "nixos-unstable" {
+		t.Errorf("NotificationBranches = %v, want [staging nixos-unstable]", cfg.NotificationBranches)
+	}
+}
+
+func TestTargetNotInNotificationBranchesErrors(t *testing.T) {
+	// Target branch "nixos-24.11" is not in notification branches → error
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable,nixos-24.11")
+	t.Setenv("NPT_NOTIFICATION_BRANCHES", "nixos-unstable")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should error when target branches are not in notification branches")
+	}
+	if !strings.Contains(err.Error(), "nixos-24.11") {
+		t.Errorf("error %q should mention the missing branch 'nixos-24.11'", err)
+	}
+}
+
+func TestNotificationBranchesWhitespaceOnly(t *testing.T) {
+	t.Setenv("NPT_TARGET_BRANCHES", "nixos-unstable")
+	t.Setenv("NPT_NOTIFICATION_BRANCHES", " , , ")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should error for whitespace-only NPT_NOTIFICATION_BRANCHES")
 	}
 }

@@ -15,20 +15,22 @@ import (
 )
 
 type Server struct {
-	db       *db.DB
-	gh       *github.Client
-	bus      *event.Bus
-	branches []string
-	tmpl     *template.Template
+	db                   *db.DB
+	gh                   *github.Client
+	bus                  *event.Bus
+	notificationBranches []string
+	targetBranches       []string
+	tmpl                 *template.Template
 }
 
-func New(database *db.DB, gh *github.Client, bus *event.Bus, branches []string, tmpl *template.Template) *Server {
+func New(database *db.DB, gh *github.Client, bus *event.Bus, notificationBranches []string, targetBranches []string, tmpl *template.Template) *Server {
 	return &Server{
-		db:       database,
-		gh:       gh,
-		bus:      bus,
-		branches: branches,
-		tmpl:     tmpl,
+		db:                   database,
+		gh:                   gh,
+		bus:                  bus,
+		notificationBranches: notificationBranches,
+		targetBranches:       targetBranches,
+		tmpl:                 tmpl,
 	}
 }
 
@@ -156,8 +158,8 @@ func (s *Server) handleAddPR(w http.ResponseWriter, r *http.Request) {
 		})
 
 		// Check each branch and emit + record if already landed
-		landedCount := 0
-		for _, branch := range s.branches {
+		landedBranches := make(map[string]bool)
+		for _, branch := range s.notificationBranches {
 			inBranch, err := s.gh.IsCommitInBranch(r.Context(), info.MergeCommit, branch)
 			if err != nil {
 				log.Printf("server: checking PR #%d in %s: %v", req.PRNumber, branch, err)
@@ -175,10 +177,16 @@ func (s *Server) handleAddPR(w http.ResponseWriter, r *http.Request) {
 					Branch:    branch,
 					Timestamp: time.Now(),
 				})
-				landedCount++
+				landedBranches[branch] = true
 			}
 		}
-		allLanded = landedCount == len(s.branches)
+		allLanded = true
+		for _, branch := range s.targetBranches {
+			if !landedBranches[branch] {
+				allLanded = false
+				break
+			}
+		}
 	}
 
 	// Auto-remove if already landed in all branches

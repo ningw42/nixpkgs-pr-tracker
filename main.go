@@ -24,10 +24,16 @@ import (
 var templateFS embed.FS
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("loading configuration: %v", err)
+	}
 
-	if err := config.ValidateBranches(cfg.Branches); err != nil {
-		log.Fatalf("invalid configuration: %v", err)
+	if err := config.ValidateBranches(cfg.TargetBranches); err != nil {
+		log.Fatalf("invalid target branches %v: %v", cfg.TargetBranches, err)
+	}
+	if err := config.ValidateBranches(cfg.NotificationBranches); err != nil {
+		log.Fatalf("invalid notification branches %v: %v", cfg.NotificationBranches, err)
 	}
 
 	database, err := db.New(cfg.DBPath)
@@ -60,15 +66,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	p := poller.New(database, ghClient, bus, cfg.PollInterval, cfg.Branches)
+	p := poller.New(database, ghClient, bus, cfg.PollInterval, cfg.NotificationBranches, cfg.TargetBranches)
 	p.Start(ctx)
-	log.Printf("poller started (interval: %s, branches: %v)", cfg.PollInterval, cfg.Branches)
+	log.Printf("poller started (interval: %s, notification branches: %v, target branches: %v)", cfg.PollInterval, cfg.NotificationBranches, cfg.TargetBranches)
 
 	// Parse templates
 	tmpl := template.Must(template.ParseFS(templateFS, "web/templates/*.html"))
 
 	// Start HTTP server
-	srv := server.New(database, ghClient, bus, cfg.Branches, tmpl)
+	srv := server.New(database, ghClient, bus, cfg.NotificationBranches, cfg.TargetBranches, tmpl)
 	httpServer := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Routes()}
 
 	go func() {

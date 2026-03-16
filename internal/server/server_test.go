@@ -25,7 +25,7 @@ type testEnv struct {
 	router http.Handler
 }
 
-func setupTest(t *testing.T, branches []string) *testEnv {
+func setupTest(t *testing.T, notificationBranches []string, targetBranches ...[]string) *testEnv {
 	t.Helper()
 
 	dsn := "file:" + t.Name() + "?mode=memory&cache=shared"
@@ -46,7 +46,11 @@ func setupTest(t *testing.T, branches []string) *testEnv {
 
 	tmpl := template.Must(template.New("").Parse(testTemplate))
 
-	s := New(database, ghClient, bus, branches, tmpl)
+	tb := notificationBranches
+	if len(targetBranches) > 0 {
+		tb = targetBranches[0]
+	}
+	s := New(database, ghClient, bus, notificationBranches, tb, tmpl)
 
 	return &testEnv{
 		db:     database,
@@ -443,5 +447,38 @@ func TestPRDetailPageInvalidNumber(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestAddPRTargetBranchesAutoRemove(t *testing.T) {
+	// Track staging + nixos-unstable as notification branches,
+	// but only nixos-unstable is a target branch.
+	// PR already landed in nixos-unstable but not staging → should be auto-removed.
+	env := setupTest(t,
+		[]string{"staging", "nixos-unstable"},
+		[]string{"nixos-unstable"},
+	)
+
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/pulls/70", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"number": 70, "title": "Target Branch Test", "user": map[string]any{"login": "alice"},
+			"state": "closed", "merged": true, "merge_commit_sha": "shaFinal",
+		})
+	})
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/compare/staging...shaFinal", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"status": "ahead"}) // not landed
+	})
+	env.ghMux.HandleFunc("/repos/NixOS/nixpkgs/compare/nixos-unstable...shaFinal", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"status": "behind"}) // landed
+	})
+
+	req := httptest.NewRequest("POST", "/api/prs", strings.NewReader(`{"pr_number": 70}`))
+	w := httptest.NewRecorder()
+	env.router.ServeHTTP(w, req)
+
+	// PR should be auto-removed because nixos-unstable (the only target branch) has landed
+	_, err := env.db.GetPR(70)
+	if err == nil {
+		t.Error("expected PR to be auto-removed after landing in all target branches")
 	}
 }

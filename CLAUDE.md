@@ -17,20 +17,21 @@ nix develop --command go test ./internal/db/               # run tests for a sin
 
 All config is via environment variables (no flags/files):
 
-| Variable            | Default          | Description                                     |
-| ------------------- | ---------------- | ----------------------------------------------- |
-| `NPT_LISTEN_ADDR`   | `:8585`          | HTTP server address                             |
-| `NPT_DB_PATH`       | `./tracker.db`   | SQLite database path                            |
-| `NPT_GITHUB_TOKEN`  | (empty)          | GitHub API token (optional, raises rate limits) |
-| `NPT_WEBHOOK_URL`   | (empty)          | Webhook URL for notifications                   |
-| `NPT_POLL_INTERVAL` | `5m`             | How often to poll GitHub                        |
-| `NPT_BRANCHES`      | `nixos-unstable` | Comma-separated list of branches to track       |
+| Variable                    | Default               | Description                                       |
+| --------------------------- | --------------------- | ------------------------------------------------- |
+| `NPT_LISTEN_ADDR`           | `:8585`               | HTTP server address                               |
+| `NPT_DB_PATH`               | `./tracker.db`        | SQLite database path                              |
+| `NPT_GITHUB_TOKEN`          | (empty)               | GitHub API token (optional, raises rate limits)   |
+| `NPT_WEBHOOK_URL`           | (empty)               | Webhook URL for notifications                     |
+| `NPT_POLL_INTERVAL`         | `5m`                  | How often to poll GitHub                          |
+| `NPT_TARGET_BRANCHES`       | (required)            | Branches that must land before auto-removing a PR |
+| `NPT_NOTIFICATION_BRANCHES` | `NPT_TARGET_BRANCHES` | Comma-separated list of branches to poll/notify   |
 
 ## Architecture
 
 A Go web service that tracks NixOS/nixpkgs pull requests and monitors whether their merge commits have landed in target branches (e.g. `nixos-unstable`).
 
-**Flow:** User adds a PR number via the web UI or API → the app fetches PR info from GitHub → a background poller periodically checks if the PR has been merged and if its merge commit has reached each tracked branch → once landed in all branches, the PR is auto-removed.
+**Flow:** User adds a PR number via the web UI or API → the app fetches PR info from GitHub → a background poller periodically checks if the PR has been merged and if its merge commit has reached each tracked branch → once landed in all target branches, the PR is auto-removed.
 
 ### Key packages
 

@@ -13,20 +13,22 @@ import (
 )
 
 type Poller struct {
-	db       *db.DB
-	gh       *github.Client
-	bus      *event.Bus
-	interval time.Duration
-	branches []string
+	db                   *db.DB
+	gh                   *github.Client
+	bus                  *event.Bus
+	interval             time.Duration
+	notificationBranches []string
+	targetBranches       []string
 }
 
-func New(database *db.DB, gh *github.Client, bus *event.Bus, interval time.Duration, branches []string) *Poller {
+func New(database *db.DB, gh *github.Client, bus *event.Bus, interval time.Duration, notificationBranches []string, targetBranches []string) *Poller {
 	return &Poller{
-		db:       database,
-		gh:       gh,
-		bus:      bus,
-		interval: interval,
-		branches: branches,
+		db:                   database,
+		gh:                   gh,
+		bus:                  bus,
+		interval:             interval,
+		notificationBranches: notificationBranches,
+		targetBranches:       targetBranches,
 	}
 }
 
@@ -148,7 +150,7 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) error {
 			}
 		}
 
-		for _, branch := range p.branches {
+		for _, branch := range p.notificationBranches {
 			if landedBranches[branch] {
 				continue
 			}
@@ -192,9 +194,9 @@ func (p *Poller) pollPR(ctx context.Context, pr db.TrackedPR) error {
 			}
 		}
 
-		// Remove PR once it has landed in all tracked branches
+		// Remove PR once it has landed in all target branches
 		allLanded := true
-		for _, branch := range p.branches {
+		for _, branch := range p.targetBranches {
 			if !landedBranches[branch] {
 				allLanded = false
 				break

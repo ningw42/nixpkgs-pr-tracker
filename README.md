@@ -11,7 +11,7 @@ After a nixpkgs PR is merged, it can take days or weeks for the commit to propag
 1. You add a PR number through the web UI or API.
 2. The app fetches PR info from GitHub and starts tracking it.
 3. A background poller periodically checks whether the PR has been merged and if its merge commit has reached each tracked branch.
-4. Once the commit lands in all tracked branches, the PR is automatically removed from tracking.
+4. Once the commit lands in all target branches, the PR is automatically removed from tracking.
 5. Optionally, webhook notifications are sent at each stage (added, merged, landed, removed).
 
 ## Quick start
@@ -20,7 +20,8 @@ After a nixpkgs PR is merged, it can take days or weeks for the commit to propag
 # Build (requires Nix)
 nix develop --command go build -o nixpkgs-pr-tracker .
 
-# Run with defaults (listens on :8585, tracks nixos-unstable)
+# Run with defaults (listens on :8585)
+export NPT_TARGET_BRANCHES="nixos-unstable"
 ./nixpkgs-pr-tracker
 
 # Or run directly
@@ -33,20 +34,22 @@ Open http://localhost:8585 in your browser to use the dashboard.
 
 All configuration is via environment variables:
 
-| Variable            | Default          | Description                                     |
-| ------------------- | ---------------- | ----------------------------------------------- |
-| `NPT_LISTEN_ADDR`   | `:8585`          | HTTP listen address                             |
-| `NPT_DB_PATH`       | `./tracker.db`   | SQLite database file path                       |
-| `NPT_GITHUB_TOKEN`  | _(empty)_        | GitHub API token (optional, raises rate limits) |
-| `NPT_WEBHOOK_URL`   | _(empty)_        | Webhook URL for notifications                   |
-| `NPT_POLL_INTERVAL` | `5m`             | How often to poll GitHub                        |
-| `NPT_BRANCHES`      | `nixos-unstable` | Comma-separated branches to track               |
+| Variable                    | Default               | Description                                       |
+| --------------------------- | --------------------- | ------------------------------------------------- |
+| `NPT_LISTEN_ADDR`           | `:8585`               | HTTP listen address                               |
+| `NPT_DB_PATH`               | `./tracker.db`        | SQLite database file path                         |
+| `NPT_GITHUB_TOKEN`          | _(empty)_             | GitHub API token (optional, raises rate limits)   |
+| `NPT_WEBHOOK_URL`           | _(empty)_             | Webhook URL for notifications                     |
+| `NPT_POLL_INTERVAL`         | `5m`                  | How often to poll GitHub                          |
+| `NPT_TARGET_BRANCHES`       | _(required)_          | Branches that must land before auto-removing a PR |
+| `NPT_NOTIFICATION_BRANCHES` | `NPT_TARGET_BRANCHES` | Comma-separated branches to poll and notify for   |
 
 ### Example
 
 ```bash
 export NPT_GITHUB_TOKEN="ghp_..."
-export NPT_BRANCHES="staging,staging-next,master,nixos-unstable-small,nixos-unstable,nixpkgs-unstable"
+export NPT_TARGET_BRANCHES="nixos-unstable"
+export NPT_NOTIFICATION_BRANCHES="staging,staging-next,master,nixos-unstable-small,nixos-unstable,nixpkgs-unstable"
 export NPT_POLL_INTERVAL="2m"
 export NPT_WEBHOOK_URL="https://telepush.example.com/api/inlets/nixpkgs-pr-tracker/your-token"
 ./nixpkgs-pr-tracker
