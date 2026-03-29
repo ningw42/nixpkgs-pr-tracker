@@ -80,7 +80,7 @@
           pname = "nixpkgs-pr-tracker";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-YDI9K8JJEiAuPWHYexLeajd4sNDuZ+4TQS4t2AajiOw=";
+          vendorHash = "sha256-hJmSxREo9h84cIRCcV+veYMTb69Tfb4PUB4Gk7HHQwY=";
         };
       };
 
@@ -89,10 +89,20 @@
         {
           default = pkgs.mkShell {
             inherit (self.checks.${system}.pre-commit-check) shellHook;
-            packages = with pkgs; [
-              go
-              gopls
-              gotools
+            packages = [
+              pkgs.go
+              pkgs.gopls
+              pkgs.gotools
+              (pkgs.writeShellApplication {
+                name = "update-go-deps";
+                runtimeInputs = with pkgs; [
+                  go
+                  gnused
+                  gnugrep
+                  git
+                ];
+                text = builtins.readFile ./scripts/update-go-deps.sh;
+              })
             ];
           };
         }
