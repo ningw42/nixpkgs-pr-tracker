@@ -80,7 +80,7 @@
           pname = "nixpkgs-pr-tracker";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-hJmSxREo9h84cIRCcV+veYMTb69Tfb4PUB4Gk7HHQwY=";
+          vendorHash = "sha256-RLjIRfqsA+9NPPn3D0v62k9OwlhXOSUOn+mXsN4vp5Y=";
         };
       };
 
